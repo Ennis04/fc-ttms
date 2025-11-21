@@ -20,6 +20,9 @@ export const useUserStore = defineStore('user', {
     },
     logout() {
       localStorage.removeItem("session_id_utm_ttms")
+      if(localStorage.getItem("is_admin")){
+        localStorage.removeItem("is_admin")
+      }
       this.matric_no = ""
       this.name = ""
       this.description = ""

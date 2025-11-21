@@ -1,5 +1,5 @@
 <template>
-    <div>
+    <div class="footer w-full">
         Footer components at the bottom
     </div>
 </template>

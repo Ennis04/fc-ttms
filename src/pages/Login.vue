@@ -69,6 +69,7 @@ const login = async () => {
     
           // store session_id in localStorage
           localStorage.setItem("session_id_utm_ttms",adminData.session_id)
+          localStorage.setItem("is_admin","true")
           console.log("admin session id: ", adminData.session_id)
         } else {
             toast.error("Invalid credentials. Please try again.", { id: "login-failed" })

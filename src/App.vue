@@ -8,21 +8,23 @@ import { useUserStore } from './stores/user';
 import { onMounted } from 'vue';
 
   // const isAuth = localStorage.getItem("session_id_utm_ttms")
-  const user =  localStorage.getItem("session_id_utm_ttms") ? useUserStore() : null
+  const user = useUserStore(); 
 
   onMounted(() => {
-    if (user && !user.isLoggedIn) {
-      // If there's a session ID in localStorage but the user store is not logged in, set the user as logged in
-      user.isLoggedIn = true;
-      // Optionally, you can fetch and set other user details here if needed
-    }
-  });
+  const session = localStorage.getItem("session_id_utm_ttms");
+
+  if (session) {
+    user.isLoggedIn = true;   // Make the store reactive
+  }
+});
 </script>
 
 <template>
-  <Navbar v-if="user.isLoggedIn"/>
-  <router-view />
-  <Footer/>
+  <div class="min-h-screen flex flex-col">
+    <Navbar v-if="user.isLoggedIn"/>
+    <router-view />
+    <Footer/>
+  </div>
 </template>
 
 <style scoped></style>

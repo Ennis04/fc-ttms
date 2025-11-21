@@ -9,6 +9,7 @@ import { toast } from "vue-sonner";
 const drawerOpen = ref(false)
 const user = useUserStore()
 const router = useRouter()
+const isAdmin = localStorage.getItem("is_admin")? true : false
 
 function toggleDrawer() {
     drawerOpen.value = !drawerOpen.value
@@ -39,7 +40,7 @@ const goToPages = (page) => {
                 <a href="/venue" class="text-black hover:text-gray-900">Venue</a>
                 <a href="/lecturer" class="text-black hover:text-gray-900">Lecturer</a>
                 <a href="/students" class="text-black hover:text-gray-900">Student</a>
-                <a href="/admin" v-if="user.role==='admin'" class="text-black hover:text-gray-900">Admin</a>
+                <a href="/admin" v-if="isAdmin" class="text-black hover:text-gray-900">Admin</a>
             </div>
 
             <!-- Logout Button using shadcn Button -->
@@ -100,7 +101,7 @@ const goToPages = (page) => {
                         <GraduationCap class="text-black" />
                         Student
                     </button>
-                    <button class="drawer-list" v-if="user.role==='admin'" @click="goToPages('/admin')">
+                    <button class="drawer-list" v-if="isAdmin" @click="goToPages('/admin')">
                         <UserStar class="text-black" />
                         Admin
                     </button>
