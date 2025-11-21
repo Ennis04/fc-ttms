@@ -10,5 +10,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Need to change proxy target when deploying
+  server: {
+  proxy: {
+    '/ttms': {
+      target: 'http://web.fc.utm.my',
+      changeOrigin: true,
+      rewrite: path => path.replace(/^\/ttms/, '')
+    }
+  }
+}
+
 })
   

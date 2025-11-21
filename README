@@ -2,4 +2,6 @@ To install shadcn components:
 
 npx shadcn-vue@latest add <components-name>
 
+Eg: npx shadcn-vue@latest add sonner
+
 visit https://www.shadcn-vue.com/docs/introduction
