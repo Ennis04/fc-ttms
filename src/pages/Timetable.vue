@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import { 
-    Search, Filter, Eye, ArrowLeft, Loader2, ArrowUpDown, ChevronLeft, ChevronRight, X
+    Search, Filter, Eye, ArrowLeft, Loader2, ArrowUpDown, X
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,12 @@ const loading = ref(false);
 const error = ref("");
 const timetableData = ref([]);
 
+// --- SORTING STATE ---
+const sortBy = ref('time'); 
+
 // --- FILTER STATE ---
-const isFilterOpen = ref(false); // Controls the dropdown visibility
-const selectedDay = ref(null);   // Stores the selected day (e.g., 2 for Monday)
+const isFilterOpen = ref(false); 
+const selectedDay = ref(null);   
 
 // --- MAPPING FOR DROPDOWN ---
 const availableDays = [
@@ -30,9 +33,9 @@ const availableDays = [
     { value: 6, label: "Friday" }, 
 ];
 
-// --- SEARCH & FILTER LOGIC ---
+// --- SEARCH, FILTER & SORT LOGIC ---
 const filteredTimetable = computed(() => {
-    let data = timetableData.value;
+    let data = [...timetableData.value];
 
     // 1. Filter by Search Query
     if (searchQuery.value) {
@@ -44,9 +47,19 @@ const filteredTimetable = computed(() => {
         });
     }
 
-    // 2. Filter by Day (If a day is selected)
+    // 2. Filter by Day
     if (selectedDay.value !== null) {
         data = data.filter(item => item.hari == selectedDay.value);
+    }
+
+    // 3. Sorting Logic
+    if (sortBy.value === 'subject') {
+        data.sort((a, b) => a.nama_subjek.localeCompare(b.nama_subjek));
+    } else {
+        data.sort((a, b) => {
+            if (a.hari != b.hari) return a.hari - b.hari;
+            return a.masa - b.masa;
+        });
     }
 
     return data;
@@ -61,11 +74,10 @@ const formatDay = (day) => {
     return days[day] || day; 
 }
 
-// --- HELPER: FORMAT TIME (+6 Hour Rule + 50 Mins) ---
+// --- HELPER: FORMAT TIME ---
 const formatSingleBlock = (apiMasa) => {
     const startHour = parseInt(apiMasa) + 6; 
     const pad = (n) => n < 10 ? '0' + n : n;
-    // User requested XX00 - XX50 format
     return `${pad(startHour)}00 - ${pad(startHour)}50`;
 }
 
@@ -148,13 +160,8 @@ const fetchTimetable = async () => {
         });
 
         const nestedResults = await Promise.all(detailedRequests);
-        const rawFlatData = nestedResults.flat();
-        
-        // 4. Sort
-        timetableData.value = rawFlatData.sort((a, b) => {
-            if (a.hari != b.hari) return a.hari - b.hari;
-            return a.masa - b.masa;
-        });
+        // We don't sort here anymore, the computed property handles it!
+        timetableData.value = nestedResults.flat();
 
     } catch (err) {
         console.error(err);
@@ -181,7 +188,7 @@ const toggleFilter = () => {
 }
 const selectDay = (dayValue) => {
     selectedDay.value = dayValue;
-    isFilterOpen.value = false; // Close menu after selection
+    isFilterOpen.value = false; 
 }
 const clearFilter = () => {
     selectedDay.value = null;
@@ -211,7 +218,6 @@ const clearFilter = () => {
             </div>
 
             <div class="bg-purple-50/50 p-4 rounded-lg mb-6 flex flex-col md:flex-row gap-4 items-center relative z-10">
-                
                 <div class="relative w-full md:w-auto" @click.stop>
                     <Button 
                         variant="outline" 
@@ -222,29 +228,18 @@ const clearFilter = () => {
                         <Filter class="w-4 h-4" />
                         <span v-if="selectedDay === null">Filter</span>
                         <span v-else>{{ formatDay(selectedDay) }}</span>
-                        
-                        <div v-if="selectedDay !== null" 
-                             @click.stop="clearFilter" 
-                             class="ml-2 hover:bg-white/20 rounded-full p-0.5">
+                        <div v-if="selectedDay !== null" @click.stop="clearFilter" class="ml-2 hover:bg-white/20 rounded-full p-0.5">
                             <X class="w-3 h-3" />
                         </div>
                     </Button>
 
                     <div v-if="isFilterOpen" class="absolute top-full mt-2 left-0 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
                         <div class="py-1">
-                            <button 
-                                class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-primary transition-colors"
-                                @click="clearFilter"
-                            >
+                            <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-primary transition-colors" @click="clearFilter">
                                 Show All Days
                             </button>
                             <div class="border-t border-gray-100 my-1"></div>
-                            <button 
-                                v-for="day in availableDays" 
-                                :key="day.value"
-                                class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-primary transition-colors flex justify-between items-center"
-                                @click="selectDay(day.value)"
-                            >
+                            <button v-for="day in availableDays" :key="day.value" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-primary transition-colors flex justify-between items-center" @click="selectDay(day.value)">
                                 {{ day.label }}
                                 <span v-if="selectedDay === day.value" class="text-primary text-xs font-bold">✓</span>
                             </button>
@@ -259,16 +254,21 @@ const clearFilter = () => {
             </div>
 
             <div class="flex items-center justify-between text-gray-500 text-xs uppercase font-semibold border-b pb-2 mb-2 px-2">
-                <div class="flex items-center gap-1 w-1/2">
-                    Subject Code 
-                    <ArrowUpDown class="w-3 h-3 cursor-pointer hover:text-primary"/>
+                <div 
+                    class="flex items-center gap-1 w-1/2 cursor-pointer transition-colors hover:text-primary"
+                    :class="sortBy === 'subject' ? 'text-primary' : ''"
+                    @click="sortBy = 'subject'"
+                >
+                    Subject 
+                    <ArrowUpDown class="w-3 h-3" />
                 </div>
-                <div class="flex items-center justify-between w-1/2">
-                    <span>Date & Time</span>
-                    <div class="flex gap-1">
-                        <ChevronLeft class="w-4 h-4 cursor-pointer hover:text-primary"/>
-                        <ChevronRight class="w-4 h-4 cursor-pointer hover:text-primary"/>
-                    </div>
+                <div 
+                    class="flex items-center justify-end gap-1 w-1/2 cursor-pointer transition-colors hover:text-primary"
+                    :class="sortBy === 'time' ? 'text-primary' : ''"
+                    @click="sortBy = 'time'"
+                >
+                    <span>Day & Time</span>
+                    <ArrowUpDown class="w-3 h-3" />
                 </div>
             </div>
 
@@ -312,13 +312,14 @@ const clearFilter = () => {
 
             <Card class="w-full shadow-md border border-gray-100">
                 <CardContent class="p-6 space-y-8 relative">
+                    
                     <div>
-                        <h2 class="text-lg md:text-xl font-serif font-semibold text-gray-800 uppercase leading-snug">
+                        <h2 class="text-xl font-bold text-primary mb-1 uppercase">
                             {{ selectedItem.nama_subjek }}
                         </h2>
-                        <span class="inline-block bg-primary/10 text-primary text-xs px-2 py-1 rounded mt-2 font-bold">
+                        <p class="text-sm text-gray-500">
                             {{ selectedItem.kod_subjek }}
-                        </span>
+                        </p>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-4">
