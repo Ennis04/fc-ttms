@@ -1,13 +1,20 @@
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
 import { 
-    Search, Eye, ArrowLeft, Loader2, MapPin, ChevronLeft, ChevronRight 
+    Search, Eye, ArrowLeft, Loader2, MapPin, ChevronLeft, ChevronRight, X, Calendar, Clock 
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import axios from "axios"; 
 import { useUserStore } from "@/stores/user";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // --- STATE MANAGEMENT ---
 const userStore = useUserStore();
@@ -28,7 +35,14 @@ const itemsPerPage = 10;
 const venueList = ref([]);       
 const selectedVenue = ref(null); 
 const venueSchedule = ref([]);   
-const selectedDay = ref(2);      
+const selectedDay = ref(2);
+
+// --- AVAILABILITY MODAL STATE ---
+const showAvailabilityModal = ref(false);
+const checkDay = ref(""); 
+const checkTime = ref("");
+const availableVenues = ref([]);
+const isChecking = ref(false);
 
 // --- COMPUTED PROPERTIES ---
 
