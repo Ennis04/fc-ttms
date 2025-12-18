@@ -7,3 +7,4 @@ export { default as Student } from './Student.vue';
 export { default as Timetable } from './Timetable.vue';
 export { default as Venue } from './Venue.vue';
 export { default as Admin } from './Admin.vue';
+export { default as StudentClassTime } from './StudentClassTime.vue';

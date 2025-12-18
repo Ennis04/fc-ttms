@@ -84,7 +84,7 @@ watch(searchQuery, () => {
 const fetchCourses = async () => {
     loading.value = true;
     
-    if (!userStore.matric_no) {
+    if (!userStore.sessionToken) {
         error.value = "Session lost. Please Logout and Login again.";
         loading.value = false;
         return;

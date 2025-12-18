@@ -6,7 +6,7 @@ export const useUserStore = defineStore('user', {
     name: "",
     description: "",
     role: "",
-    isLoggedIn: true, //! change after mock API
+    isLoggedIn: false, //! change after mock API
     sessionToken: localStorage.getItem('session_id_utm_ttms'),
   }),
   actions: {

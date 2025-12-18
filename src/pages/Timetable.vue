@@ -83,8 +83,8 @@ const formatTime = (apiMasa) => {
 const fetchTimetable = async () => {
     loading.value = true;
     error.value = "";
-    
-    if (!userStore.matric_no) {
+    console.log("Fetching timetable for matric no:", userStore.matric_no);
+    if (userStore.sessionToken === "") {
         error.value = "Session lost. Please Logout and Login again.";
         loading.value = false;
         return;

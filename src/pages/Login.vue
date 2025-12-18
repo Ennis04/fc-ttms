@@ -52,8 +52,8 @@ const login = async () => {
   
         // store session_id in localStorage
         localStorage.setItem("session_id_utm_ttms",data.session_id)
-        localStorage.setItem("user_matric_no", data.login_name) // <--- NEW
-        localStorage.setItem("user_full_name", data.full_name)  // <--- NEW
+        // localStorage.setItem("user_matric_no", data.login_name) // <--- NEW
+        // localStorage.setItem("user_full_name", data.full_name)  // <--- NEW
         console.log("user session id: ", data.session_id)
       } else {
           toast.error("Invalid credentials. Please try again.", { id: "login-failed" })

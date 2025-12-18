@@ -97,7 +97,7 @@ const formatTime = (apiMasa) => {
 
 const initPage = async () => {
     loading.value = true;
-    
+    console.log("matric no in store:", userStore.matric_no)
     if (userStore.matric_no) {
         try {
             const historyRes = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
