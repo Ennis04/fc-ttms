@@ -52,6 +52,8 @@ const login = async () => {
   
         // store session_id in localStorage
         localStorage.setItem("session_id_utm_ttms",data.session_id)
+        // localStorage.setItem("user_matric_no", data.login_name) // <--- NEW
+        // localStorage.setItem("user_full_name", data.full_name)  // <--- NEW
         console.log("user session id: ", data.session_id)
       } else {
           toast.error("Invalid credentials. Please try again.", { id: "login-failed" })
@@ -68,7 +70,7 @@ const login = async () => {
       const adminData = adminResponse.data[0]
         if (adminData && adminData.session_id) {
           user.login({ matric_no: "admin", description: "admin", name: "Admin", isLoggedIn: true, role: role.value, sessionToken: adminData.session_id })
-    
+          user.setToken();
           // store session_id in localStorage
           localStorage.setItem("session_id_utm_ttms",adminData.session_id)
           localStorage.setItem("is_admin","true")
@@ -113,12 +115,12 @@ const login = async () => {
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label>UTM ID</Label>
-          <Input v-model="utm_id" type="id" placeholder="UTM ID" value="A23CS0105"/>
+          <Input v-model="utm_id" type="id" placeholder="UTM ID" />
         </div>
 
         <div class="space-y-2 relative">
           <Label>Password</Label>
-          <Input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="Password" class="pr-10" value="040122010669" />
+          <Input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="Password" class="pr-10"  />
           <!-- Eye button -->
           <button type="button" @click="showPassword = !showPassword"
             class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 ">
@@ -135,8 +137,8 @@ const login = async () => {
             </SelectTrigger>
             <SelectContent class="w-full">
               <SelectGroup class="flex flex-col gap-2 p-2">
-                <SelectItem value="admin" class="w-full hover:bg-gray-100 p-2">Admin</SelectItem>
-                <SelectItem value="student/lecturer" class="w-full hover:bg-gray-100 p-2">Lecturer/Student</SelectItem>
+                <SelectItem value="admin" class="w-full hover:bg-gray-100 p-2">Lecturer/Admin</SelectItem>
+                <SelectItem value="student/lecturer" class="w-full hover:bg-gray-100 p-2">Student</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>

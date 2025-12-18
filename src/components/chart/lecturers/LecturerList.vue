@@ -7,6 +7,7 @@ import TableCell from '@/components/ui/table/TableCell.vue';
 import TableHead from '@/components/ui/table/TableHead.vue';
 import TableHeader from '@/components/ui/table/TableHeader.vue';
 import TableRow from '@/components/ui/table/TableRow.vue';
+import { useUserStore } from '@/stores/user';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
@@ -24,6 +25,8 @@ const selectedYear = ref("");
 // Pagination
 const currentPage = ref(1);
 const pageSize = 10;
+
+const user = useUserStore()
 
 // Clear filter
 const clearFilter = () => {
@@ -105,10 +108,11 @@ onMounted(async () => {
   try {
     lecturers.value = await getStudents(
       "pensyarah",
-      sessionId,
+      user.sessionToken,
       "2024/2025",
       0,
     );
+    console.log(`Lecturers data: ${JSON.stringify(lecturers.value, null, 2)}`);
   } catch (error) {
     console.log("Error fetching lecturers list: ", error);
     toast.error("Failed to load lecturers list.", {

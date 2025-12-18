@@ -3,7 +3,7 @@ import BarChart from "@/components/chart/students/CoursesStudent.vue";
 import { Button } from "@/components/ui/button"; // shadcn Button import
 import { useUserStore } from "@/stores/user";
 import { ChartLine, GraduationCap, House, LibraryBig, Loader2, School, Sheet, Users, UserStar } from "lucide-vue-next";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { Bar } from "vue-chartjs";
@@ -31,7 +31,6 @@ const user = useUserStore()
 const router = useRouter()
 const admissionInfo = ref({ session: "Loading...", semester: "-", year: "-" });
 const semesters = ref([]);
-const chartData = ref({ labels: [], datasets: [] });
 const chartOptions = ref({ responsive: true });
 const isLoading = ref(true)
 
@@ -50,55 +49,6 @@ const goToPages = (page) => {
     router.push(page)
 }
 
-const loadCurriculumRoadmap = async () => {
-    const mockResponse = {
-        session: "2023/2024",
-        current_semester: "1",
-        current_year: "2",
-        roadmap: [
-            {
-                sem_id: 1,
-                name: "Year 1 - Sem 1",
-                total_credit: 15,
-                subjects: [
-                    { code: "SECJ1013", name: "Programming Technique I", type: "Core", credit: 3 },
-                    { code: "SECI1013", name: "Discrete Structure", type: "Core", credit: 3 },
-                    { code: "UHIS1022", name: "Philosophy & Current Issues", type: "Elective", credit: 2 },
-                    { code: "SECJ1013", name: "Technology & Info System", type: "Core", credit: 3 },
-                ]
-            },
-            {
-                sem_id: 2,
-                name: "Year 1 - Sem 2",
-                total_credit: 12,
-                subjects: [
-                    { code: "SECJ1023", name: "Programming Technique II", type: "Core", credit: 3 },
-                    { code: "SECP1013", name: "Database Systems", type: "Core", credit: 3 },
-                    { code: "UHLB1112", name: "English Comm Skills", type: "University", credit: 2 },
-                ]
-            }
-        ]
-    };
-    admissionInfo.value = {
-        session: mockResponse.session,
-        semester: mockResponse.current_semester,
-        year: mockResponse.current_year
-    };
-    semesters.value = mockResponse.roadmap;
-
-    chartData.value = {
-        labels: mockResponse.roadmap.map(s => s.name),
-        datasets: [{
-            label: 'Total Credit Hours',
-            backgroundColor: '#800000',
-            data: mockResponse.roadmap.map(s => s.total_credit)
-        }]
-    };
-};
-
-onMounted(() => {
-    loadCurriculumRoadmap();
-});
 
 onMounted(async () => {
     try {
@@ -128,37 +78,140 @@ onMounted(async () => {
     }
 });
 
+const groupedSemesters = computed(() => {
+    // Check if data is available and is an array
+    if (!students.value[0].sesi || !Array.isArray(students.value)) {
+        return [];
+    }
+
+    // Use a Map to group subjects by Year and then by Semester
+    const yearSemesterMap = new Map();
+
+    students.value.forEach(subject => {
+        const year = subject.tahun_kursus;
+        const semester = subject.semester;
+
+        // Use a combined key for uniqueness (e.g., "Year 3 - Semester 1")
+        const key = `Year ${year} - Semester ${semester}`;
+
+        if (!yearSemesterMap.has(key)) {
+            yearSemesterMap.set(key, {
+                // Assuming credit and type aren't in the data, we'll use placeholder/logic
+                sem_id: key.replace(/[^a-zA-Z0-9]/g, '_'), // Safe ID for key
+                name: key, // e.g., "Year 3 - Semester 1"
+                total_credit: 0, // We need to calculate this
+                subjects: []
+            });
+        }
+
+        const semGroup = yearSemesterMap.get(key);
+
+        // Map the raw data keys to the keys needed by your template
+        const structuredSubject = {
+            code: subject.kod_subjek,
+            name: subject.nama_subjek,
+            // NOTE: Your raw data is missing 'credit' and 'type' (Core/Elective). 
+            // I'm using placeholder values here. You must update this logic.
+            credit: 3, // PLACEHOLDER: Update with actual credit value
+            type: subject.kod_subjek.startsWith('SECJ') ? 'Core' : 'Elective' // EXAMPLE LOGIC
+        };
+
+        semGroup.subjects.push(structuredSubject);
+        semGroup.total_credit += structuredSubject.credit; // Accumulate credits
+    });
+
+    // 3. Convert Map values to an Array and sort them logically (Year then Semester)
+    const groupedArray = Array.from(yearSemesterMap.values());
+
+    // Sort by year ascending, then semester ascending
+    groupedArray.sort((a, b) => {
+        const yearA = parseInt(a.name.match(/Year (\d+)/)[1]);
+        const yearB = parseInt(b.name.match(/Year (\d+)/)[1]);
+        const semA = parseInt(a.name.match(/Semester (\d+)/)[1]);
+        const semB = parseInt(b.name.match(/Semester (\d+)/)[1]);
+
+        if (yearA !== yearB) {
+            return yearA - yearB;
+        }
+        return semA - semB;
+    });
+
+    return groupedArray;
+});
+
+const chartData = computed(() => {
+    if (!students.value[0].sesi || students.value.length === 0) {
+        return null; // Return null if data isn't ready
+    }
+    // 1. Group the subjects by 'tahun_kursus' (Course Year)
+    const subjectCountByYear = students.value.reduce((acc, subject) => {
+        const year = `Year ${subject.tahun_kursus}`;
+        acc[year] = (acc[year] || 0) + 1;
+        return acc;
+    }, {});
+
+    // 2. Prepare the arrays for Chart.js
+    const labels = Object.keys(subjectCountByYear).sort(); // Sort labels (e.g., Year 1, Year 2, Year 3)
+    const data = labels.map(label => subjectCountByYear[label]);
+
+    // 3. Structure the data object for Bar Chart
+    return {
+        labels: labels,
+        datasets: [
+            {
+                label: 'Number of Subjects Taken',
+                backgroundColor: '#10B981', // Tailwind's emerald-500 or similar primary color
+                borderColor: '#059669',
+                borderWidth: 1,
+                data: data,
+            }
+        ]
+    };
+});
+
+onMounted(() => {
+    groupedSemesters
+    chartData
+})
+
 </script>
 
 <template>
     <div v-if="isLoading" class="flex items-center justify-center h-screen">
         <Loader2 class="animate-spin text-primary h-8 w-8" />
     </div>
+
     <div class="p-6 space-y-6" v-if="!isLoading">
         <h1 class="text-2xl font-bold text-primary">Welcome back {{ user.name }}</h1>
 
         <div class="bg-white p-4 rounded shadow border-l-4 border-primary">
             <h2 class="text-lg font-semibold">Admission Info</h2>
-            <div class="flex gap-6 mt-2 text-gray-700">
+            
+            <div class="flex flex-wrap gap-4 md:gap-6 mt-2 text-gray-700">
                 <div><span class="font-bold" v-if="studentSession !== ''">Session:</span> {{ studentSession }}</div>
                 <div><span class="font-bold" v-if="studentYear !== 0">Current Year:</span> {{ studentYear }}</div>
                 <div><span class="font-bold" v-if="studentSem != 0">Semester:</span> {{ studentSem }}</div>
             </div>
         </div>
 
-        <div class="bg-white p-4 rounded shadow">
-            <h2 class="text-lg font-semibold mb-4">Credit Hours Distribution</h2>
-            <div class="h-64">
-                <Bar v-if="chartData.labels.length" :data="chartData" :options="chartOptions" />
+        <div class="p-4 bg-white rounded-lg shadow-md w-full flex items-center justify-center">
+            <div v-if="!chartData" class="text-center text-gray-500 w-full">
+                <div class="flex items-center justify-center">
+                    <Loader2 class="animate-spin text-primary h-8 w-8" />
+                </div>
+            </div>
+
+            <div v-else class="w-full h-80 flex items-center justify-center">
+                <Bar id="subject-load-chart" :options="chartOptions" :data="chartData" />
             </div>
         </div>
 
         <div class="grid md:grid-cols-2 gap-6">
-            <div v-for="sem in semesters" :key="sem.sem_id" class="bg-white border rounded-lg shadow-sm p-4">
+            <div v-for="sem in groupedSemesters" :key="sem.sem_id" class="bg-white border rounded-lg shadow-sm p-4">
                 <div class="flex justify-between border-b pb-2 mb-2">
                     <h3 class="font-bold text-primary">{{ sem.name }}</h3>
-                    <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Total Credits: {{ sem.total_credit
-                        }}</span>
+                    <!-- <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Total Credits: {{ sem.total_credit
+                        }}</span> -->
                 </div>
                 <ul class="space-y-3">
                     <li v-for="sub in sem.subjects" :key="sub.code" class="flex justify-between items-start text-sm">
@@ -166,14 +219,9 @@ onMounted(async () => {
                             <div class="font-medium">{{ sub.code }}</div>
                             <div class="text-gray-500 text-xs">{{ sub.name }}</div>
                         </div>
-                        <div class="text-right">
+                        <!-- <div class="text-right">
                             <span class="block font-bold">{{ sub.credit }} Credit</span>
-                            <span
-                                :class="{ 'text-red-600': sub.type === 'Core', 'text-blue-600': sub.type === 'Elective' }"
-                                class="text-xs">
-                                {{ sub.type }}
-                            </span>
-                        </div>
+                        </div> -->
                     </li>
                 </ul>
             </div>

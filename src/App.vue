@@ -12,9 +12,14 @@ const user = useUserStore();
 
 onMounted(() => {
   const session = localStorage.getItem("session_id_utm_ttms");
+  const matric = localStorage.getItem("user_matric_no"); // <--- Get Matric
+  const name = localStorage.getItem("user_full_name");   // <--- Get Name
 
   if (session) {
     user.isLoggedIn = true;   // Make the store reactive
+    user.matric_no = matric || ""; 
+    user.name = name || "User";
+    user.sessionToken = session;
   }
 });
 </script>

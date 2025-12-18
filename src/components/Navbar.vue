@@ -9,7 +9,8 @@ import { toast } from "vue-sonner";
 const drawerOpen = ref(false)
 const user = useUserStore()
 const router = useRouter()
-const isAdmin = localStorage.getItem("is_admin")? true : false
+const isAdmin = localStorage.getItem("is_admin") ? true : false
+const analysisToggle = ref(false)
 
 function toggleDrawer() {
     drawerOpen.value = !drawerOpen.value
@@ -27,11 +28,11 @@ const goToPages = (page) => {
 }
 
 onMounted(() => {
-  const session = localStorage.getItem("session_id_utm_ttms");
+    const session = localStorage.getItem("session_id_utm_ttms");
 
-  if (session) {
-    user.isLoggedIn = true;   // Make the store reactive
-  }
+    if (session) {
+        user.isLoggedIn = true;   // Make the store reactive
+    }
 });
 
 </script>
@@ -39,16 +40,32 @@ onMounted(() => {
     <div>
         <!-- Navbar -->
         <nav class="hidden md:flex justify-between items-center px-6 py-4 shadow-md">
-            <div class="flex items-center justify-between space-x-4 w-1/2" >
+            <div class="flex items-center justify-between space-x-4 w-1/2">
                 <img src="../assets/utm-logo.png" class="h-10 w-30 object-cover" />
                 <a href="/" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Dashboard</a>
                 <a href="/timetable" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Timetable</a>
                 <a href="/courses" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Courses</a>
-                <a href="/analysis" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Analysis</a>
+                <div class="relative text-black hover:text-gray-900 cursor-pointer"
+                    v-if="user.isLoggedIn">
+                    <span @click="analysisToggle = !analysisToggle">
+                        Analysis
+                    </span>
+                    <div v-if="analysisToggle"
+                        class="absolute mt-2 bg-white border rounded shadow-lg p-2 flex flex-col items-center space-y-2 z-50 w-40">
+                        <router-link to="/subject-analysis" class="hover:bg-gray-100 p-1 border-b-2" @click="analysisToggle = false">
+                            Subject Analysis
+                        </router-link>
+                        <router-link to="/student-analysis" class="hover:bg-gray-100 p-1" @click="analysisToggle = false">
+                            Student Analysis
+                        </router-link>
+                    </div>
+                </div>
                 <a href="/venue" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Venue</a>
-                <a href="/lecturer" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Lecturer</a>
-                <a href="/students" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Student</a>
-                <a href="/admin" v-if="isAdmin" class="text-black hover:text-gray-900" >Admin</a>
+                <a href="/lecturer" class="text-black hover:text-gray-900"
+                    v-if="user.isLoggedIn && user.role == 'admin'">Lecturer</a>
+                <a href="/students" class="text-black hover:text-gray-900"
+                    v-if="user.isLoggedIn && user.role == 'admin'">Student</a>
+                <!-- <a href="/admin" v-if="isAdmin" class="text-black hover:text-gray-900" >Admin</a> -->
             </div>
 
             <Button variant="outline" color="destructive" @click="handleLogout" v-if="user.isLoggedIn">

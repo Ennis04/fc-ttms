@@ -6,10 +6,15 @@ export const useUserStore = defineStore('user', {
     name: "",
     description: "",
     role: "",
-    isLoggedIn: false,
-    sessionToken: "",
+    isLoggedIn: false, //! change after mock API
+    sessionToken: localStorage.getItem('session_id_utm_ttms'),
   }),
   actions: {
+    setToken(){
+      console.log("token have been save ")
+        this.sessionToken = localStorage.getItem('session_id_utm_ttms')
+    },
+
     login({name, matric_no, description, role, isLoggedIn, sessionToken}) {
       this.matric_no = matric_no
       this.name = name
