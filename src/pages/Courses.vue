@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import axios from "axios"; 
 import { useUserStore } from "@/stores/user"; 
+import { readSessionJSON, writeSessionJSON, removeSession } from "@/stores/sessionStorage";
 
 // --- STATE MANAGEMENT ---
 const userStore = useUserStore(); 
@@ -30,6 +31,32 @@ const selectedCourse = ref(null);
 const courseSections = ref([]);    
 const selectedSection = ref(null); 
 const sectionStudents = ref([]);   
+
+// CACHE SETTINGS
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+const userKey = computed(() => localStorage.getItem("matric_no") || "unknown");
+const cacheBase = computed(() => `ttms:directory:${userKey.value}`);
+
+// cache keys
+const keyLevel1 = computed(() => `${cacheBase.value}:level1`);
+// level2 depends on sesi/sem + course code
+const keyLevel2 = computed(() => {
+  const code = selectedCourse.value?.kod_subjek || "none";
+  return `${cacheBase.value}:level2:${currentSesi.value}:${currentSem.value}:${code}`;
+});
+// level3 depends on sesi/sem + course code + section
+const keyLevel3 = computed(() => {
+  const code = selectedCourse.value?.kod_subjek || "none";
+  const sec = selectedSection.value?.seksyen || "none";
+  return `${cacheBase.value}:level3:${currentSesi.value}:${currentSem.value}:${code}:${sec}`;
+});
+
+const isFresh = (savedAt) => {
+  if (!CACHE_MAX_AGE_MS) return true;
+  if (typeof savedAt !== "number") return false;
+  return Date.now() - savedAt <= CACHE_MAX_AGE_MS;
+};
 
 // --- COMPUTED PROPERTIES ---
 
@@ -81,6 +108,28 @@ watch(searchQuery, () => {
 // --- API ACTIONS ---
 
 // LEVEL 1: Fetch ALL Courses (Using Auto-Detected Session)
+const restoreLevel1Cache = () => {
+  const cached = readSessionJSON(keyLevel1.value, null);
+  if (!cached || !isFresh(cached.savedAt)) return false;
+
+  if (Array.isArray(cached.courses)) {
+    coursesList.value = cached.courses;
+  }
+  if (cached.sesi) currentSesi.value = cached.sesi;
+  if (cached.sem) currentSem.value = cached.sem;
+
+  return coursesList.value.length > 0 && !!currentSesi.value;
+};
+
+const saveLevel1Cache = () => {
+  writeSessionJSON(keyLevel1.value, {
+    savedAt: Date.now(),
+    sesi: currentSesi.value,
+    sem: currentSem.value,
+    courses: coursesList.value,
+  });
+};
+
 const fetchCourses = async () => {
     loading.value = true;
     
@@ -122,6 +171,7 @@ const fetchCourses = async () => {
         // Sort Alphabetically
         coursesList.value.sort((a, b) => a.nama_subjek.localeCompare(b.nama_subjek));
 
+        saveLevel1Cache();
     } catch (err) {
         error.value = "Failed to load directory. Ensure CORS is ON.";
     } finally {
@@ -130,78 +180,123 @@ const fetchCourses = async () => {
 };
 
 // LEVEL 2: Fetch Details
-const openCourseDetail = async (course) => {
-    loading.value = true;
-    selectedCourse.value = { 
-        ...course, 
-        kredit: course.kredit || course.jam_kredit || "...", 
-        kod_fakulti: course.kod_fakulti || "FC" 
-    }; 
-    
-    try {
-        // Fetch ALL sections
-        const response = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
-            params: {
-                entity: 'subjek_seksyen',
-                sesi: currentSesi.value,     
-                semester: currentSem.value,  
-                limit: 1000 
-            }
-        });
+const restoreLevel2Cache = () => {
+  const cached = readSessionJSON(keyLevel2.value, null);
+  if (!cached || !isFresh(cached.savedAt)) return false;
 
-        const allSubjectsData = response.data || [];
-        const matchedSubject = allSubjectsData.find(s => s.kod_subjek === course.kod_subjek);
+  if (cached.selectedCourse) selectedCourse.value = cached.selectedCourse;
+  if (Array.isArray(cached.sections)) courseSections.value = cached.sections;
 
-        if (matchedSubject && matchedSubject.seksyen_list) {
-            courseSections.value = matchedSubject.seksyen_list;
-            courseSections.value.sort((a, b) => parseInt(a.seksyen) - parseInt(b.seksyen));
-            
-            if(matchedSubject.bil_pelajar) {
-                // Metadata update if needed
-            }
-        } else {
-            courseSections.value = [];
-        }
-        
-        currentView.value = 2; 
-    } catch (err) {
-        error.value = "Failed to load course details.";
-    } finally {
-        loading.value = false;
-    }
+  return courseSections.value.length >= 0; // can be empty but still valid
 };
 
+const saveLevel2Cache = () => {
+  writeSessionJSON(keyLevel2.value, {
+    savedAt: Date.now(),
+    selectedCourse: selectedCourse.value,
+    sections: courseSections.value,
+  });
+};
+
+const openCourseDetail = async (course) => {
+  error.value = "";
+  selectedCourse.value = {
+    ...course,
+    kredit: course.kredit || course.jam_kredit || "...",
+    kod_fakulti: course.kod_fakulti || "FC",
+  };
+
+  if (restoreLevel2Cache()) {
+    currentView.value = 2;
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const response = await axios.get("http://web.fc.utm.my/ttms/web_man_webservice_json.cgi", {
+      params: {
+        entity: "subjek_seksyen",
+        sesi: currentSesi.value,
+        semester: currentSem.value,
+        limit: 1000,
+      },
+    });
+
+    const allSubjectsData = response.data || [];
+    const matchedSubject = allSubjectsData.find((s) => s.kod_subjek === course.kod_subjek);
+
+    courseSections.value = matchedSubject?.seksyen_list ? matchedSubject.seksyen_list : [];
+    courseSections.value.sort((a, b) => parseInt(a.seksyen) - parseInt(b.seksyen));
+
+    saveLevel2Cache();
+    currentView.value = 2;
+  } catch (err) {
+    error.value = "Failed to load course details.";
+  } finally {
+    loading.value = false;
+  }
+};
+
+
 // LEVEL 3: Fetch Students
+const restoreLevel3Cache = () => {
+  const cached = readSessionJSON(keyLevel3.value, null);
+  if (!cached || !isFresh(cached.savedAt)) return false;
+
+  if (cached.selectedSection) selectedSection.value = cached.selectedSection;
+  if (Array.isArray(cached.students)) sectionStudents.value = cached.students;
+
+  return true;
+};
+
+const saveLevel3Cache = () => {
+  writeSessionJSON(keyLevel3.value, {
+    savedAt: Date.now(),
+    selectedSection: selectedSection.value,
+    students: sectionStudents.value,
+  });
+};
+
 const openSectionDetail = async (section) => {
-    loading.value = true;
-    selectedSection.value = section;
-    
-    const sessionId = localStorage.getItem("session_id_utm_ttms");
+  error.value = "";
+  selectedSection.value = section;
 
-    try {
-        const response = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
-            params: {
-                entity: 'subjek_pelajar', 
-                session_id: sessionId,
-                sesi: currentSesi.value,    
-                semester: currentSem.value, 
-                kod_subjek: selectedCourse.value.kod_subjek,
-                seksyen: section.seksyen
-            }
-        });
-        
-        sectionStudents.value = Array.isArray(response.data) ? response.data : [];
-        
-        if (sectionStudents.value.length > 0) {
-            sectionStudents.value.sort((a, b) => a.nama.localeCompare(b.nama));
-        }
+  if (!selectedCourse.value?.kod_subjek) {
+    error.value = "Course not selected.";
+    return;
+  }
 
-        currentView.value = 3; 
-    } catch (err) {
-        error.value = "Failed to load student list.";
-    } finally {
-        loading.value = false;
-    }
+  // ✅ Cache first
+  if (restoreLevel3Cache()) {
+    currentView.value = 3;
+    return;
+  }
+
+  loading.value = true;
+  const sessionId = localStorage.getItem("session_id_utm_ttms");
+
+  try {
+    const response = await axios.get("http://web.fc.utm.my/ttms/web_man_webservice_json.cgi", {
+      params: {
+        entity: "subjek_pelajar",
+        session_id: sessionId,
+        sesi: currentSesi.value,
+        semester: currentSem.value,
+        kod_subjek: selectedCourse.value.kod_subjek,
+        seksyen: section.seksyen,
+      },
+    });
+
+    sectionStudents.value = Array.isArray(response.data) ? response.data : [];
+    sectionStudents.value.sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
+
+    saveLevel3Cache();
+    currentView.value = 3;
+  } catch (err) {
+    error.value = "Failed to load student list.";
+  } finally {
+    loading.value = false;
+  }
 };
 
 const goBack = () => {
@@ -217,7 +312,8 @@ const prevPage = () => {
 }
 
 onMounted(() => {
-    fetchCourses();
+  const restored = restoreLevel1Cache();
+  if (!restored) fetchCourses();
 });
 </script>
 

@@ -18,6 +18,7 @@ import {
 import Label from "@/components/ui/label/Label.vue";
 import CardHeader from "@/components/ui/card/CardHeader.vue";
 import CardTitle from "@/components/ui/card/CardTitle.vue";
+import{readSessionJSON, writeSessionJSON, removeSession} from "@/stores/sessionStorage";
 
 // --- STATE MANAGEMENT ---
 const userStore = useUserStore();
@@ -46,6 +47,56 @@ const checkDay = ref("");
 const checkTime = ref("");
 const availableVenues = ref([]);
 const isChecking = ref(false);
+
+// CACHE SETTINGS
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+const userKey = computed(() => localStorage.getItem("matric_no") || "unknown");
+const cacheBase = computed(() => `ttms:venue:${userKey.value}`);
+
+const keyVenueList = computed(() => `${cacheBase.value}:list`);
+const keyVenueSchedule = computed(() => {
+  const code = selectedVenue.value?.kod_ruang || "none";
+  return `${cacheBase.value}:schedule:${currentSesi.value}:${currentSem.value}:${code}`;
+});
+
+const isFresh = (savedAt) => {
+  if (!CACHE_MAX_AGE_MS) return true;
+  if (typeof savedAt !== "number") return false;
+  return Date.now() - savedAt <= CACHE_MAX_AGE_MS;
+};
+
+const restoreVenueListCache = () => {
+  const cached = readSessionJSON(keyVenueList.value, null);
+  if (!cached || !isFresh(cached.savedAt)) return false;
+
+  if (Array.isArray(cached.venues)) venueList.value = cached.venues;
+  return venueList.value.length > 0;
+};
+
+const saveVenueListCache = () => {
+  writeSessionJSON(keyVenueList.value, {
+    savedAt: Date.now(),
+    venues: venueList.value,
+  });
+};
+
+const restoreVenueScheduleCache = () => {
+  const cached = readSessionJSON(keyVenueSchedule.value, null);
+  if (!cached || !isFresh(cached.savedAt)) return false;
+
+  if (cached.venue) selectedVenue.value = cached.venue;
+  if (Array.isArray(cached.schedule)) venueSchedule.value = cached.schedule;
+  return true;
+};
+
+const saveVenueScheduleCache = () => {
+  writeSessionJSON(keyVenueSchedule.value, {
+    savedAt: Date.now(),
+    venue: selectedVenue.value,
+    schedule: venueSchedule.value,
+  });
+};
 
 // --- COMPUTED PROPERTIES ---
 
@@ -115,6 +166,12 @@ const formatTime = (apiMasa) => {
 const initPage = async () => {
     loading.value = true;
 
+    const restored = restoreVenueListCache();
+    if (!restored) {
+        await fetchVenues();
+    }
+    loading.value = false;
+
     if (userStore.matric_no) {
         try {
             const historyRes = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
@@ -127,6 +184,12 @@ const initPage = async () => {
         } catch (e) {
             // Silent fail if session detect errors
         }
+    }
+    
+    if (!currentSesi.value || !currentSem.value) {
+        const year = new Date().getFullYear();
+        currentSesi.value = `${year}/${year + 1}`;
+        currentSem.value = 1;
     }
 
     await fetchVenues();
@@ -142,28 +205,36 @@ const fetchVenues = async () => {
         venueList.value = response.data || [];
         venueList.value.sort((a, b) => a.nama_ruang.localeCompare(b.nama_ruang));
 
+        saveVenueListCache();
     } catch (err) {
         error.value = "Failed to load venues.";
     }
 };
 
 const openVenueDetail = async (venue) => {
-    loading.value = true;
+    error.value = "";
     selectedVenue.value = venue;
     venueSchedule.value = [];
 
+    if (restoreVenueScheduleCache()) {
+        currentView.value = 2;
+        return;
+    }
+
+    loading.value = true;
     try {
-        const response = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
-            params: {
-                entity: 'jadual_ruang',
-                sesi: currentSesi.value,
-                semester: currentSem.value,
-                kod_ruang: venue.kod_ruang,
-                limit: 2000
-            }
+        const response = await axios.get("http://web.fc.utm.my/ttms/web_man_webservice_json.cgi", {
+        params: {
+            entity: "jadual_ruang",
+            sesi: currentSesi.value,
+            semester: currentSem.value,
+            kod_ruang: venue.kod_ruang,
+            limit: 2000,
+        },
         });
-        
+
         venueSchedule.value = response.data || [];
+        saveVenueScheduleCache();
         currentView.value = 2;
     } catch (err) {
         error.value = "Failed to load venue schedule.";
@@ -171,6 +242,7 @@ const openVenueDetail = async (venue) => {
         loading.value = false;
     }
 };
+
 
 const openTimetable = () => {
     selectedDay.value = 2;

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import axios from "axios"; 
 import { useUserStore } from "@/stores/user";
+import { readSessionJSON, writeSessionJSON, removeSession } from "@/stores/sessionStorage";
 
 // --- STATE MANAGEMENT ---
 const userStore = useUserStore();
@@ -34,6 +35,59 @@ const availableDays = [
     { value: 5, label: "Thursday" },
     { value: 6, label: "Friday" }, 
 ];
+
+// --- CACHE KEYS (per user) ---
+const cacheKeyBase = computed(() => {
+  const id = localStorage.getItem("matric_no") || "unknown";
+  return `ttms:timetable:${id}`;
+});
+const cacheKeyData = computed(() => `${cacheKeyBase.value}:data`);
+const cacheKeyMeta = computed(() => `${cacheKeyBase.value}:meta`);
+
+// Optional cache expiry (set to null to disable)
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+const restoreFromCache = () => {
+  const cachedData = readSessionJSON(cacheKeyData.value, []);
+  const cachedMeta = readSessionJSON(cacheKeyMeta.value, null);
+
+  if (!cachedMeta || !Array.isArray(cachedData) || cachedData.length === 0) {
+    return false;
+  }
+
+  // Expiry check
+  if (
+    typeof cachedMeta.savedAt === "number" &&
+    CACHE_MAX_AGE_MS &&
+    Date.now() - cachedMeta.savedAt > CACHE_MAX_AGE_MS
+  ) {
+    return false;
+  }
+
+    timetableData.value = cachedData;
+  currentSesi.value = cachedMeta.sesi || "";
+  currentSem.value = cachedMeta.sem || "";
+  return true;
+};
+
+const saveToCache = () => {
+  writeSessionJSON(cacheKeyData.value, timetableData.value);
+  writeSessionJSON(cacheKeyMeta.value, {
+    sesi: currentSesi.value,
+    sem: currentSem.value,
+    savedAt: Date.now(),
+  });
+};
+
+const clearTimetableCache = () => {
+  removeSession(cacheKeyData.value);
+  removeSession(cacheKeyMeta.value);
+};
+
+const refreshTimetable = async () => {
+  clearTimetableCache();
+  await fetchTimetable();
+};
 
 // --- COMPUTED PROPERTIES ---
 const filteredTimetable = computed(() => {
@@ -208,6 +262,7 @@ const fetchTimetable = async () => {
             return a.masa - b.masa;
         });
 
+        saveToCache();
     } catch (err) {
         console.error(err);
         error.value = "Error loadging timetable. Please try again later.";
@@ -217,7 +272,10 @@ const fetchTimetable = async () => {
 };
 
 onMounted(() => {
+  const restored = restoreFromCache();
+  if (!restored) {
     fetchTimetable();
+  }
 });
 
 const viewDetails = (item) => {
