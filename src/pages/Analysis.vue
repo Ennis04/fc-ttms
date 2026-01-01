@@ -24,7 +24,7 @@ ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 const isLoading = ref(true);
 const subjects = ref([]);
 const searchTerm = ref('');
-const selectedSubject = ref({});
+const selectedSubject = ref(null);
 const studentChartData = ref(null);
 
 const user = useUserStore()

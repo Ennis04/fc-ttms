@@ -8,186 +8,126 @@ import { Loader2 } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 import getStudents from '@/api/api';
 
-//! class number analysis by time slot and day of week
-
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
-// --- Constants for Mapping ---
-const DAY_MAP_NUMERIC = { // Numeric key for internal logic
-    1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+// --- Constants ---
+const DAY_MAP_NUMERIC = {
+    1: 'Sunday', 2: 'Monday', 3: 'Tuesday', 4: 'Wednesday', 5: 'Thursday', 6: 'Friday', 7: 'Saturday'
 };
-// Array of objects for use in the Select component
+
 const DAY_FILTER_OPTIONS = [
-    { value: 'all', label: 'All Days' }, // New option to show all days
-    { value: '1', label: 'Monday' },
-    { value: '2', label: 'Tuesday' },
-    { value: '3', label: 'Wednesday' },
-    { value: '4', label: 'Thursday' },
-    { value: '5', label: 'Friday' },
-    { value: '6', label: 'Saturday' },
-    { value: '7', label: 'Sunday' },
+    { value: 'all', label: 'All Days' },
+    ...Object.entries(DAY_MAP_NUMERIC).map(([val, label]) => ({ value: val, label }))
 ];
 
 const TIME_MAP = {
-    2: '8:00 AM', 3: '9:00 AM', 4: '10:00 AM', 5: '11:00 AM', 6: '12:00 PM', 7: '1:00 PM', 
+    2: '8:00 AM', 3: '9:00 AM', 4: '10:00 AM', 5: '11:00 AM', 6: '12:00 PM', 7: '1:00 PM',
     8: '2:00 PM', 9: '3:00 PM', 10: '4:00 PM', 11: '5:00 PM'
 };
 
-// --- 1. Reactive State (Updated) ---
+// --- State ---
 const isLoading = ref(true);
 const session = ref('2025/2026');
 const semester = ref('1');
-const dayFilter = ref('all'); // NEW: Default to showing all days
+const dayFilter = ref('all');
+const chartMode = ref('overall'); // 'overall' or 'details'
 
-const rawScheduleData = ref([]); 
+const rawScheduleData = ref([]);
 const classDensityData = ref(null);
+const user = useUserStore();
 
-const user = useUserStore()
 const fetchAndGenerateChart = async () => {
     isLoading.value = true;
     classDensityData.value = null;
-    rawScheduleData.value = await getStudents('jadual_subjek', user.sessionToken, session.value, semester.value)
-    
+
+    if (session.value === '2025/2026') {
+        semester.value = 1
+    }
+    // API Call
+    rawScheduleData.value = await getStudents('jadual_subjek', user.sessionToken, session.value, semester.value);
+    console.log("Session Token, session, semester: ", user.sessionToken, session.value, semester.value)
     let processedData = rawScheduleData.value;
-    
-    // NEW: Filter the data by the selected day (if not 'all')
-    if (dayFilter.value !== 'all') {
-        const filterDayNumeric = parseInt(dayFilter.value);
-        processedData = rawScheduleData.value.filter(item => item.hari === filterDayNumeric);
-    }
-
-    // --- Aggregation Logic (only runs on the filtered or full dataset) ---
     const densityMap = {};
-    
-    processedData.forEach(item => {
-        const dayLabel = DAY_MAP_NUMERIC[item.hari] || `Day ${item.hari}`;
-        const timeLabel = TIME_MAP[item.masa] || `Slot ${item.masa}`;
-        
-        // Key changes depending on filter: Day-Time (if all) or just Time (if filtered)
-        const key = (dayFilter.value === 'all') 
-            ? `${dayLabel} - ${timeLabel}`
-            : timeLabel; 
 
-        densityMap[key] = (densityMap[key] || 0) + 1;
-    });
+    if (chartMode.value === 'overall') {
+        // --- MODE: OVERALL (Group by Day only) ---
+        // We initialize all days to 0 so the chart shows empty days too
+        Object.keys(DAY_MAP_NUMERIC).forEach(d => densityMap[DAY_MAP_NUMERIC[d]] = 0);
 
-    // 2. Sorting Logic
-    const sortedDensityArray = Object.keys(densityMap).map(key => {
-        let dayName, time;
-        let hariNumeric = 0;
-        
-        if (dayFilter.value === 'all') {
-            [dayName, time] = key.split(' - ');
-            hariNumeric = Object.keys(DAY_MAP_NUMERIC).find(k => DAY_MAP_NUMERIC[k] === dayName);
-        } else {
-            time = key;
+        processedData.forEach(item => {
+            const dayLabel = DAY_MAP_NUMERIC[item.hari];
+            if (dayLabel) densityMap[dayLabel]++;
+        });
+    } else {
+        // --- MODE: DETAILS (Group by Time Slot) ---
+        if (dayFilter.value !== 'all') {
+            const filterDayNumeric = parseInt(dayFilter.value);
+            processedData = rawScheduleData.value.filter(item => item.hari === filterDayNumeric);
         }
 
-        return {
-            key,
-            dayName,
-            time,
-            count: densityMap[key],
-            hariNumeric: hariNumeric,
-            masaNumeric: Object.keys(TIME_MAP).find(k => TIME_MAP[k] === time.replace(/ (AM|PM)/, '')) 
-        };
-    }).sort((a, b) => {
-        // Sort by Day first (if showing all days)
-        if (dayFilter.value === 'all' && a.hariNumeric !== b.hariNumeric) {
-            return a.hariNumeric - b.hariNumeric;
-        }
-        // Always sort by time slot second
-        return a.masaNumeric - b.masaNumeric;
-    });
-
-
-    // 3. Find the least busy time slot
-    let minCount = Infinity;
-    if (sortedDensityArray.length > 0) {
-        minCount = Math.min(...sortedDensityArray.map(d => d.count));
+        processedData.forEach(item => {
+            const dayLabel = DAY_MAP_NUMERIC[item.hari] || `Day ${item.hari}`;
+            const timeLabel = TIME_MAP[item.masa] || `Slot ${item.masa}`;
+            const key = (dayFilter.value === 'all') ? `${dayLabel} - ${timeLabel}` : timeLabel;
+            densityMap[key] = (densityMap[key] || 0) + 1;
+        });
     }
-    
-    // 4. Transform data for Chart.js
-    // Labels are formatted differently based on the filter
-    const labels = sortedDensityArray.map(d => 
-        (dayFilter.value === 'all') ? `${d.dayName}\n(${d.time})` : d.time
-    );
-    const counts = sortedDensityArray.map(d => d.count);
-    
-    const backgroundColors = counts.map(count => 
-        count === minCount ? '#DC2626' : '#3B82F6' // Red for least busy
-    );
+
+    // --- Transform and Sort ---
+    const sortedArray = Object.keys(densityMap).map(key => ({
+        label: key,
+        count: densityMap[key],
+        // Logic to help sorting
+        dayIdx: Object.values(DAY_MAP_NUMERIC).indexOf(key.split(' - ')[0]),
+        timeIdx: Object.keys(TIME_MAP).find(k => TIME_MAP[k] === key.split(' - ')[1]?.replace(/ (AM|PM)/, '')) || 0
+    })).sort((a, b) => a.dayIdx - b.dayIdx || a.timeIdx - b.timeIdx);
+
+    const minCount = sortedArray.length > 0 ? Math.min(...sortedArray.map(d => d.count)) : 0;
 
     classDensityData.value = {
-        labels: labels,
+        labels: sortedArray.map(d => d.label),
         datasets: [{
-            label: 'Total Classes Scheduled',
-            backgroundColor: backgroundColors,
-            data: counts,
+            label: 'Total Classes',
+            backgroundColor: sortedArray.map(d => d.count === minCount ? '#DC2626' : '#3B82F6'),
+            data: sortedArray.map(d => d.count),
         }]
     };
 
     isLoading.value = false;
 };
 
-// --- 3. Lifecycle and Watchers (Updated Dependency Array) ---
+const availableSemesters = computed(() => {
+    if (session.value === '2025/2026') {
+        return [{ value: '1', label: 'Semester 1' }];
+    }
+    return [
+        { value: '1', label: 'Semester 1' },
+        { value: '2', label: 'Semester 2' }
+    ];
+});
 
-watch(
-    // ADDED dayFilter to the dependencies list
-    [session, semester, dayFilter],
-    () => {
-        classDensityData.value = null; 
-        fetchAndGenerateChart();
-    },
-    { immediate: true }
-);
-
-// --- 4. Chart Options and Least Busy Slot Text (Updated Title) ---
+watch([session, semester, dayFilter, chartMode], fetchAndGenerateChart, { immediate: true });
 
 const chartOptions = computed(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    scales: {
-        y: {
-            beginAtZero: true,
-            title: { display: true, text: 'Number of Classes' },
-            ticks: { precision: 0 }
-        }
-    },
     plugins: {
         legend: { display: false },
         title: {
             display: true,
-            // Dynamic title based on filter
-            text: (dayFilter.value === 'all') 
-                  ? 'Class Density by Day and Time Slot' 
-                  : `${DAY_MAP_NUMERIC[parseInt(dayFilter.value)]} Class Density by Time Slot`,
+            text: chartMode.value === 'overall' ? 'Total Class Volume per Day' : 'Detailed Class Density',
             font: { size: 16 }
-        },
-        tooltip: {
-             callbacks: {
-                afterLabel: (context) => {
-                    const count = context.parsed.y;
-                    if (classDensityData.value && count === Math.min(...classDensityData.value.datasets[0].data)) {
-                        return ' (Optimal Activity Slot)';
-                    }
-                    return null;
-                }
-            }
         }
     }
 }));
 
 const leastBusySlotsText = computed(() => {
-    if (!classDensityData.value) return "Analyzing data...";
-    
+    if (!classDensityData.value) return "Analyzing...";
     const data = classDensityData.value.datasets[0].data;
     const minCount = Math.min(...data);
-
     const labels = classDensityData.value.labels;
-    const leastBusy = labels.filter((label, index) => data[index] === minCount);
-
-    return `The least number of classes is **${minCount}**. Best slots: **${leastBusy.join('; ')}** (Highlighted in RED)`;
+    const best = labels.filter((_, i) => data[i] === minCount);
+    return `Minimum class count: **${minCount}**. Recommendation: **${best.join(', ')}**`;
 });
 </script>
 
@@ -197,79 +137,94 @@ const leastBusySlotsText = computed(() => {
 
         <Card class="shadow-lg">
             <CardHeader>
-                <CardTitle class="flex items-center space-x-2">
-                    Class Time Density
-                </CardTitle>
+                <CardTitle>Class Time Density</CardTitle>
                 <CardDescription>
-                    Analyze class frequency across time slots to find the optimal window for organizing events.
+                    Switch between <b>Overall</b> to see daily totals, or <b>Details</b> to see specific time slots.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                
-                <div class="mb-6 flex flex-wrap items-center gap-4 border-b pb-4">
-                    <span class="text-sm font-medium text-gray-700">Filter by:</span>
-                    
-                    <Select v-model="session">
-                        <SelectTrigger class="w-[180px]">
-                            <SelectValue placeholder="Select Session" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
+                <div class="mb-6 flex flex-wrap items-end gap-4 border-b pb-6">
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Academic Session</label>
+                        <Select v-model="session">
+                            <SelectTrigger class="w-[160px]">
+                                <SelectValue placeholder="Select Session" />
+                            </SelectTrigger>
+                            <SelectContent>
                                 <SelectItem value="2025/2026">2025/2026</SelectItem>
                                 <SelectItem value="2024/2025">2024/2025</SelectItem>
                                 <SelectItem value="2023/2024">2023/2024</SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                                <SelectItem value="2023/2024">2022/2023</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                    <Select v-model="semester">
-                        <SelectTrigger class="w-[180px]">
-                            <SelectValue placeholder="Select Semester" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                <SelectItem value="1">Semester 1</SelectItem>
-                                <SelectItem value="2">Semester 2</SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Semester</label>
+                        <Select v-model="semester">
+                            <SelectTrigger class="w-[140px]">
+                                <SelectValue placeholder="Semester" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="sem in availableSemesters" :key="sem.value" :value="sem.value">
+                                    {{ sem.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                    <Select v-model="dayFilter">
-                        <SelectTrigger class="w-[180px]">
-                            <SelectValue placeholder="Select Day" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
+                    <div class="h-10 w-px bg-gray-200 mx-2 hidden md:block"></div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Analysis Mode</label>
+                        <Select v-model="chartMode">
+                            <SelectTrigger class="w-[160px] bg-blue-50 border-blue-200 text-blue-700 font-medium">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="overall">Overall (Days)</SelectItem>
+                                <SelectItem value="details">Details (Slots)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div v-if="chartMode === 'details'" class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Specific Day</label>
+                        <Select v-model="dayFilter">
+                            <SelectTrigger class="w-[160px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
                                 <SelectItem v-for="day in DAY_FILTER_OPTIONS" :key="day.value" :value="day.value">
                                     {{ day.label }}
                                 </SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
-                
+
                 <div class="space-y-4">
-                    <div v-if="isLoading" class="flex items-center justify-center h-96">
-                        <Loader2 class="animate-spin h-8 w-8 text-primary" />
+                    <div v-if="isLoading" class="flex flex-col items-center justify-center h-96 space-y-4">
+                        <Loader2 class="animate-spin h-10 w-10 text-primary" />
+                        <span class="text-sm text-gray-500 animate-pulse">Fetching schedule data...</span>
                     </div>
 
                     <div v-else-if="classDensityData">
-                        <div class="p-3 bg-red-50 border border-red-200 text-red-800 rounded-md">
-                            <p class="font-semibold" v-html="leastBusySlotsText"></p>
+                        <div
+                            class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg flex items-start gap-3">
+                            <div>
+                                <p class="text-sm leading-relaxed" v-html="leastBusySlotsText"></p>
+                            </div>
                         </div>
-                        
-                        <div class="h-[500px] w-full">
-                            <Bar 
-                                id="class-density-chart"
-                                :options="chartOptions"
-                                :data="classDensityData"
-                            />
-                            
+
+                        <div class="h-[500px] w-full mt-4">
+                            <Bar id="class-density-chart" :options="chartOptions" :data="classDensityData" />
                         </div>
                     </div>
-                    
-                    <div v-else class="text-center py-10 text-gray-500">
-                        No class data available for the selected session, semester, and day.
+
+                    <div v-else class="text-center py-20 border-2 border-dashed rounded-xl text-gray-400">
+                        No class data found for {{ session }} - Sem {{ semester }}.
                     </div>
                 </div>
 

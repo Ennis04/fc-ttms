@@ -60,7 +60,7 @@ onMounted(async () => {
         })
         // console.log(`response data: ${JSON.stringify(response.data, null, 2)}`)
         students.value = response.data
-
+        console.log("student is")
         if (students.value.length > 0) {
             console.log('First student object:', students.value[0].sesi);
         }
@@ -160,7 +160,7 @@ const chartData = computed(() => {
         datasets: [
             {
                 label: 'Number of Subjects Taken',
-                backgroundColor: '#10B981', // Tailwind's emerald-500 or similar primary color
+                backgroundColor: '#0096FF', 
                 borderColor: '#059669',
                 borderWidth: 1,
                 data: data,
@@ -210,8 +210,8 @@ onMounted(() => {
             <div v-for="sem in groupedSemesters" :key="sem.sem_id" class="bg-white border rounded-lg shadow-sm p-4">
                 <div class="flex justify-between border-b pb-2 mb-2">
                     <h3 class="font-bold text-primary">{{ sem.name }}</h3>
-                    <!-- <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Total Credits: {{ sem.total_credit
-                        }}</span> -->
+                    <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Number of Subjects: {{ sem.subjects.length
+                        }}</span>
                 </div>
                 <ul class="space-y-3">
                     <li v-for="sub in sem.subjects" :key="sub.code" class="flex justify-between items-start text-sm">

@@ -29,6 +29,7 @@ export const useUserStore = defineStore('user', {
       if(localStorage.getItem("is_admin")){
         localStorage.removeItem("is_admin")
       }
+      sessionStorage.clear()
       this.matric_no = ""
       this.name = ""
       this.description = ""
