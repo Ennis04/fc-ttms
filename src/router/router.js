@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user.js'
-import { Dashboard, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime, StudentList } from '../pages/index.js'
+import { Dashboard, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime, StudentList, CoursesAnalysis } from '../pages/index.js'
 
 const routes = [
   { path: '/', component: Dashboard, meta: { requiresAuth: true } },
@@ -9,6 +9,7 @@ const routes = [
   { path: '/timetable', component: Timetable, meta: { requiresAuth: true, role: ['student' , 'lecturer'] } },
   { path: '/subject-analysis', component: Analysis, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/student-analysis', component: StudentClassTime, meta: { requiresAuth: true, role: 'admin' } },
+  { path: '/courses-analysis', component: CoursesAnalysis, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/lecturer', component: Lecturer, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/students', component: Student, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/admin', component: Admin, meta: { requiresAuth: true, role: 'admin' } },

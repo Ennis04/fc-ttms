@@ -71,7 +71,7 @@ onMounted(() => {
                     </button>
 
                     <div v-if="analysisToggle"
-                        class="absolute top-full mt-2 bg-white border rounded-md shadow-lg w-44 z-50">
+                        class="absolute top-full mt-2 bg-white border rounded-md shadow-lg w-44 z-50 flex flex-col p-3 gap-3">
                         <router-link to="/subject-analysis" class="dropdown-link" @click="analysisToggle = false">
                             Subject Analysis
                         </router-link>
@@ -91,6 +91,9 @@ onMounted(() => {
 
                 <router-link v-if="user.isLoggedIn && role === 'admin'" to="/students" class="nav-link">
                     Students
+                </router-link>
+                <router-link v-if="user.isLoggedIn && role === 'admin'" to="/courses-analysis" class="nav-link">
+                    Courses
                 </router-link>
             </div>
 

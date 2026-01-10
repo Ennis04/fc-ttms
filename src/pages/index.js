@@ -9,3 +9,4 @@ export { default as Venue } from './Venue.vue';
 export { default as Admin } from './admin/Admin.vue';
 export { default as StudentClassTime } from './admin/StudentClassTime.vue';
 export { default as StudentList} from './lecturers/StudentList.vue'
+export { default as CoursesAnalysis} from './admin/CoursesAnalysis.vue'

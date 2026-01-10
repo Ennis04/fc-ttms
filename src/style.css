@@ -121,6 +121,12 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+} */
+
     .drawer-list {
   @apply flex items-center gap-3 px-3 py-2 rounded-md text-left
          hover:bg-gray-100 transition;
