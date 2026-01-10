@@ -121,6 +121,16 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+    .drawer-list {
+  @apply flex items-center gap-3 px-3 py-2 rounded-md text-left
+         hover:bg-gray-100 transition;
+}
+
+.drawer-sub {
+  @apply ml-8 px-3 py-2 text-sm rounded-md
+         hover:bg-gray-100 transition;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
