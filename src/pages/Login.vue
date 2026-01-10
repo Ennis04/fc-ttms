@@ -22,8 +22,8 @@ import { Eye, EyeClosed, EyeClosedIcon, Loader2 } from "lucide-vue-next"
 const router = useRouter()
 const user = useUserStore()
 const toast = useToast()
-const utm_id = ref("A23CS0105")
-const password = ref("040122010669")
+const utm_id = ref("12085 ")
+const password = ref("S808323")
 const role = ref("")
 const isLoggingIn = ref(false)
 const showPassword = ref(false)
@@ -62,11 +62,11 @@ const login = async () => {
             description: data.description, 
             name: data.full_name, 
             isLoggedIn: true, 
-            role: "admin", 
+            role: "lecturer", // lecturer , admin
             sessionToken: adminData.session_id 
           })
           localStorage.setItem("session_id_utm_ttms", adminData.session_id)
-          localStorage.setItem("is_admin", "true")
+          localStorage.setItem("role", "lecturer") // lecturer , admin
           localStorage.setItem('matric_no', data.login_name)
         } else {
           toast.error("Admin authentication failed", { id: "admin-failed" })
@@ -85,7 +85,7 @@ const login = async () => {
         })
         localStorage.setItem("session_id_utm_ttms", data.session_id)
         localStorage.setItem('matric_no', data.login_name)
-        localStorage.removeItem("is_admin") // Ensure admin flag is gone
+        localStorage.setItem("role", "student")
 
       } else {
         toast.error("Role not recognized. Please contact admin.", { id: "role-error" })
@@ -95,7 +95,7 @@ const login = async () => {
       // Finalize Login
       user.setToken()
       toast.success("Login successful!", { id: "login-success", timeout: 2000 })
-      router.push("/home")
+      router.push("/dashboard")
 
     } else {
       toast.error("Invalid credentials. Please try again.", { id: "login-failed" })

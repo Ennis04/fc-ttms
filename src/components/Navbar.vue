@@ -1,71 +1,88 @@
 <script setup>
-import { Button } from "@/components/ui/button"; // shadcn Button import
-import { useUserStore } from "@/stores/user";
-import { ChartLine, GraduationCap, House, LibraryBig, School, Sheet, Users, UserStar } from "lucide-vue-next";
-import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { toast } from "vue-sonner";
+import { Button } from "@/components/ui/button"
+import { useUserStore } from "@/stores/user"
+import { ChartLine, GraduationCap, House, LibraryBig, School, Sheet, Users, UserStar } from "lucide-vue-next"
+import { onMounted, ref, computed } from "vue"
+import { useRouter } from "vue-router"
+import { toast } from "vue-sonner"
 
 const drawerOpen = ref(false)
-const user = useUserStore()
-const router = useRouter()
-const isAdmin = localStorage.getItem("is_admin") ? true : false
 const analysisToggle = ref(false)
 
-function toggleDrawer() {
+const user = useUserStore()
+const router = useRouter()
+
+const role = computed(() => user.role)
+
+// toggle
+const toggleDrawer = () => {
     drawerOpen.value = !drawerOpen.value
 }
+
 const handleLogout = () => {
-    // Add your logout logic here, e.g., clearing auth tokens
-    console.log("user logging out")
     user.logout()
     toast.success("Logged out successfully!", { id: "logout-success" })
-    router.push("login")
-};
+    router.push("/login")
+}
 
 const goToPages = (page) => {
     router.push(page)
 }
 
+// restore login on refresh
 onMounted(() => {
-    const session = localStorage.getItem("session_id_utm_ttms");
-
+    const session = localStorage.getItem("session_id_utm_ttms")
     if (session) {
-        user.isLoggedIn = true;   // Make the store reactive
+        user.isLoggedIn = true
+        user.role = localStorage.getItem("role") // restore role
     }
-});
-
+})
 </script>
+
 <template>
     <div>
         <!-- Navbar -->
         <nav class="hidden md:flex justify-between items-center px-6 py-4 shadow-md">
-            <div class="flex items-center justify-between space-x-4 w-1/2">
+            <div class="flex items-center justify-start space-x-4 w-1/2">
                 <img src="../assets/utm-logo.png" class="h-10 w-30 object-cover" />
-                <a href="/" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Dashboard</a>
-                <a href="/timetable" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Timetable</a>
-                <a href="/courses" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Courses</a>
-                <div class="relative text-black hover:text-gray-900 cursor-pointer"
-                    v-if="user.isLoggedIn">
-                    <span @click="analysisToggle = !analysisToggle">
-                        Analysis
-                    </span>
-                    <div v-if="analysisToggle"
-                        class="absolute mt-2 bg-white border rounded shadow-lg p-2 flex flex-col items-center space-y-2 z-50 w-40">
-                        <router-link to="/subject-analysis" class="hover:bg-gray-100 p-1 border-b-2" @click="analysisToggle = false">
-                            Subject Analysis
-                        </router-link>
-                        <router-link to="/student-analysis" class="hover:bg-gray-100 p-1" @click="analysisToggle = false">
-                            Student Analysis
-                        </router-link>
+                <div class="flex items-center w-full justify-around">
+                    <router-link to="/dashboard" v-if="user.isLoggedIn">
+                        Dashboard
+                    </router-link>
+
+                    <router-link to="/timetable" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role != 'admin'">Timetable</router-link>
+                    <router-link to="/courses" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role != 'student'">Courses</router-link>
+                    <router-link to="/student-list" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role == 'lecturer'">Student List</router-link>
+                    <div class="relative text-black hover:text-gray-900 cursor-pointer"
+                        v-if="user.isLoggedIn && role === 'admin'">
+                        <span @click="analysisToggle = !analysisToggle">
+                            Analysis
+                        </span>
+                        <div v-if="analysisToggle"
+                            class="absolute mt-2 bg-white border rounded shadow-lg p-2 flex flex-col items-center space-y-2 z-50 w-40">
+                            <router-link to="/subject-analysis" class="hover:bg-gray-100 p-1 border-b-2"
+                                @click="analysisToggle = false">
+                                Subject Analysis
+                            </router-link>
+                            <router-link to="/student-analysis" class="hover:bg-gray-100 p-1"
+                                @click="analysisToggle = false">
+                                Student Analysis
+                            </router-link>
+                        </div>
                     </div>
+                    <router-link to="/venue" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role != 'student'">Venue
+                    </router-link>
+                    <router-link to="/lecturer" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role === 'admin'">Lecturer
+                    </router-link>
+                    <router-link to="/students" class="text-black hover:text-gray-900"
+                        v-if="user.isLoggedIn && role === 'admin'">Student
+                    </router-link>
                 </div>
-                <a href="/venue" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Venue</a>
-                <a href="/lecturer" class="text-black hover:text-gray-900"
-                    v-if="user.isLoggedIn && user.role == 'admin'">Lecturer</a>
-                <a href="/students" class="text-black hover:text-gray-900"
-                    v-if="user.isLoggedIn && user.role == 'admin'">Student</a>
-                <!-- <a href="/admin" v-if="isAdmin" class="text-black hover:text-gray-900" >Admin</a> -->
             </div>
 
             <Button variant="outline" color="destructive" @click="handleLogout" v-if="user.isLoggedIn">
@@ -104,31 +121,34 @@ onMounted(() => {
                         <House class="text-black" />
                         Dashboard
                     </button>
-                    <button class="drawer-list" @click="goToPages('/timetable')">
+                    <button class="drawer-list" @click="goToPages('/timetable')"
+                        v-if="user.isLoggedIn && role != 'admin'">
                         <Sheet class="text-black" />
                         Timetable
                     </button>
-                    <button class="drawer-list" @click="goToPages('/courses')">
+                    <button class="drawer-list" @click="goToPages('/courses')"
+                        v-if="user.isLoggedIn && (role === 'admin' || role === 'lecturer')">
                         <LibraryBig class="text-black" />
                         Courses
                     </button>
-                    <button class="drawer-list" @click="goToPages('/analysis')">
+                    <button v-if="role === 'admin'" class="drawer-list" @click="goToPages('/analysis')">
                         <ChartLine class="text-black" />
                         Analysis
                     </button>
-                    <button class="drawer-list" @click="goToPages('/venue')">
+                    <button class="drawer-list" @click="goToPages('/venue')"
+                        v-if="user.isLoggedIn && (role === 'admin' || role === 'lecturer')">
                         <School class="text-black" />
                         Venue
                     </button>
-                    <button class="drawer-list" @click="goToPages('/lecturer')">
+                    <button v-if="role === 'admin'" class="drawer-list" @click="goToPages('/lecturer')">
                         <Users class="text-black" />
                         Lecturer
                     </button>
-                    <button class="drawer-list" @click="goToPages('/students')">
+                    <button v-if="role === 'admin'" class="drawer-list" @click="goToPages('/students')">
                         <GraduationCap class="text-black" />
                         Student
                     </button>
-                    <button class="drawer-list" v-if="isAdmin" @click="goToPages('/admin')">
+                    <button class="drawer-list" v-if="role === 'admin'" @click="goToPages('/admin')">
                         <UserStar class="text-black" />
                         Admin
                     </button>

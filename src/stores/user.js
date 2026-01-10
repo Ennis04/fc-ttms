@@ -26,8 +26,8 @@ export const useUserStore = defineStore('user', {
     },
     logout() {
       localStorage.removeItem("session_id_utm_ttms")
-      if(localStorage.getItem("is_admin")){
-        localStorage.removeItem("is_admin")
+      if(localStorage.getItem("role")){
+        localStorage.removeItem("role")
       }
       sessionStorage.clear()
       this.matric_no = ""

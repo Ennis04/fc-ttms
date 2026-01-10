@@ -164,6 +164,8 @@ const fetchCourses = async () => {
                 entity: 'subjek', 
                 sesi: currentSesi.value,
                 semester: currentSem.value
+                // sesi: currentSesi.value,
+                // semester: currentSem.value
             }
         });
         

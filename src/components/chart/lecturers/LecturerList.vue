@@ -106,16 +106,29 @@ const prevPage = () => {
 // FETCH STUDENTS
 // -----------------------------
 onMounted(async () => {
+  // Always start with loading state true (if not already set)
+  isLoading.value = true; 
+
   try {
-    lecturers.value = await getStudents(
-      "pensyarah",
-      user.sessionToken,
-      "2024/2025",
-      0,
+    // Note: Rename the function to getUsers or similar if it fetches more than just students
+    const response = await getStudents(
+      "pensyarah", 
+      user.sessionToken, 
+      "2024/2025", 
+      0
     );
-    console.log(`Lecturers data: ${JSON.stringify(lecturers.value, null, 2)}`);
+
+    // Check if response exists before assigning
+    if (response) {
+      lecturers.value = response;
+      console.log("Lecturers loaded successfully");
+      console.log("lecturers: ",response)
+    }
+
   } catch (error) {
-    console.log("Error fetching lecturers list: ", error);
+    // Log the actual error message for debugging
+    console.error("Error fetching lecturers list:", error.message || error);
+    
     toast.error("Failed to load lecturers list.", {
       id: "lecturers-load-failed",
     });
