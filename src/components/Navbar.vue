@@ -48,7 +48,15 @@ onMounted(() => {
             <div class="flex items-center gap-6">
                 <img src="../assets/utm-logo.png" class="h-10 object-cover" />
 
-                <router-link v-if="user.isLoggedIn" to="/dashboard" class="nav-link">
+                <router-link v-if="user.isLoggedIn && role === 'student'" to="/dashboard-student " class="nav-link">
+                    Dashboard
+                </router-link>
+
+                <router-link v-if="user.isLoggedIn && role === 'lecturer'" to="/dashboard-lecturer" class="nav-link">
+                    Dashboard
+                </router-link>
+
+                <router-link v-if="user.isLoggedIn && role === 'admin'" to="/dashboard-admin" class="nav-link">
                     Dashboard
                 </router-link>
 
@@ -132,7 +140,20 @@ onMounted(() => {
                 <img src="../assets/utm-logo.png" class="h-12 object-cover" />
 
                 <div class="flex flex-col space-y-3 mt-7">
-                    <button class="drawer-list" @click="goToPages('/'); toggleDrawer()">
+                    <button class="drawer-list" @click="goToPages('/dashboard-student'); toggleDrawer()"
+                        v-if="user.isLoggedIn && role === 'student'">
+                        <House />
+                        Dashboard
+                    </button>
+
+                    <button class="drawer-list" @click="goToPages('/dashboard-lecturer'); toggleDrawer()"
+                        v-if="user.isLoggedIn && role === 'lecturer'">
+                        <House />
+                        Dashboard
+                    </button>
+
+                    <button class="drawer-list" @click="goToPages('/dashboard-admin'); toggleDrawer()"
+                        v-if="user.isLoggedIn && role === 'admin'">
                         <House />
                         Dashboard
                     </button>
@@ -164,7 +185,7 @@ onMounted(() => {
                             Student Analysis
                         </button>
                     </div>
-                    
+
                     <button v-if="user.isLoggedIn && (role === 'admin' || role === 'lecturer')" class="drawer-list"
                         @click="goToPages('/student-list'); toggleDrawer()">
                         <FileUser />

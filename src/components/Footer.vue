@@ -2,7 +2,7 @@
   <footer class="w-full bg-white border-t border-gray-100 mt-auto">
     <div class="max-w-7xl mx-auto px-4 py-8 md:py-12">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
-        
+
         <div class="flex flex-col space-y-4">
           <h2 class="text-xl font-bold text-primary">UTM TTMS</h2>
           <p class="text-sm text-gray-500 leading-relaxed">
@@ -14,9 +14,12 @@
         <div class="flex flex-col space-y-4">
           <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-900">Resources</h3>
           <nav class="flex flex-col space-y-2 text-sm text-gray-500">
-            <router-link to="/home" class="hover:text-primary transition-colors">Home</router-link>
+            <router-link :to="homeRoute" class="hover:text-primary transition-colors">
+              Home
+            </router-link>
             <router-link to="/timetable" class="hover:text-primary transition-colors">Timetable</router-link>
-            <a href="https://utmonline.utm.my/" target="_blank" class="hover:text-primary transition-colors">UTM Online</a>
+            <a href="https://utmonline.utm.my/" target="_blank" class="hover:text-primary transition-colors">UTM
+              Online</a>
           </nav>
         </div>
 
@@ -50,8 +53,16 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
+const role = localStorage.getItem('role')
+const homeRoute = computed(() => {
+  if (role === 'admin') return '/dashboard-admin'
+  if (role === 'lecturer') return '/dashboard-lecturer'
+  if (role === 'student') return '/dashboard-student'
+  return '/login'
+})
+
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>
