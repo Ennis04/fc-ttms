@@ -120,11 +120,11 @@ onMounted(() => {
                         <School class="text-black" />
                         Venue
                     </button>
-                    <button class="drawer-list" @click="goToPages('/lecturer')">
+                    <button class="drawer-list" v-if="user.role == 'admin'" @click="goToPages('/lecturer')">
                         <Users class="text-black" />
                         Lecturer
                     </button>
-                    <button class="drawer-list" @click="goToPages('/students')">
+                    <button class="drawer-list" v-if="user.role == 'admin'" @click="goToPages('/students')">
                         <GraduationCap class="text-black" />
                         Student
                     </button>
