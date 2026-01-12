@@ -1,19 +1,20 @@
-import {createRouter,createWebHistory} from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user.js'
-import { Home, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login , StudentClassTime} from '../pages/index.js'
+import { Home, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime } from '../pages/index.js'
 
 const routes = [
-    { path: '/' , component: Home  },
-    { path: '/login' , component: Login   },
-    { path: '/home' , component: Home, meta: {requiresAuth: true}  },
-    { path: '/timetable' , component: Timetable ,meta: {requiresAuth: true}  },
-    { path: '/courses' , component: Courses  },
-    { path: '/subject-analysis' , component: Analysis  },
-    { path: '/student-analysis' , component: StudentClassTime  },
-    { path: '/venue' , component: Venue  },
-    { path: '/lecturer' , component: Lecturer  },
-    { path: '/students' , component: Student  },
-    { path: '/admin' , component: Admin  },
+  { path: '/', component: Home },
+  { path: '/login', component: Login },
+  { path: '/home', component: Home, meta: { requiresAuth: true } },
+  { path: '/dashboard', component: Home, meta: { requiresAuth: true } },
+  { path: '/timetable', component: Timetable, meta: { requiresAuth: true } },
+  { path: '/courses', component: Courses },
+  { path: '/subject-analysis', component: Analysis },
+  { path: '/student-analysis', component: StudentClassTime },
+  { path: '/venue', component: Venue },
+  { path: '/lecturer', component: Lecturer },
+  { path: '/students', component: Student },
+  { path: '/admin', component: Admin },
 ]
 
 const router = createRouter({
@@ -30,7 +31,7 @@ router.beforeEach((to) => {
   // If user is not logged in
   if (to.meta.requiresAuth && !session_id) {
     return "/login"
-  } 
+  }
 
   // If route requires a specific role
   // Check if route requires a specific role

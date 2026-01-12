@@ -338,10 +338,3 @@ const totalAssignedCourses = computed(() => {
     </div>
 </template>
 
-<style scoped>
-nav {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-}
-</style>

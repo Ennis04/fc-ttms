@@ -9,7 +9,6 @@ import { toast } from "vue-sonner";
 const drawerOpen = ref(false)
 const user = useUserStore()
 const router = useRouter()
-const isAdmin = localStorage.getItem("is_admin") ? true : false
 const analysisToggle = ref(false)
 
 function toggleDrawer() {
@@ -20,7 +19,7 @@ const handleLogout = () => {
     console.log("user logging out")
     user.logout()
     toast.success("Logged out successfully!", { id: "logout-success" })
-    router.push("login")
+    router.push("/login")
 };
 
 const goToPages = (page) => {
@@ -42,9 +41,9 @@ onMounted(() => {
         <nav class="hidden md:flex justify-between items-center px-6 py-4 shadow-md">
             <div class="flex items-center justify-between space-x-4 w-1/2">
                 <img src="../assets/utm-logo.png" class="h-10 w-30 object-cover" />
-                <a href="/" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Dashboard</a>
-                <a href="/timetable" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Timetable</a>
-                <a href="/courses" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Courses</a>
+                <router-link to="/" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Dashboard</router-link>
+                <router-link to="/timetable" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Timetable</router-link>
+                <router-link to="/courses" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Courses</router-link>
                 <div class="relative text-black hover:text-gray-900 cursor-pointer"
                     v-if="user.isLoggedIn">
                     <span @click="analysisToggle = !analysisToggle">
@@ -60,18 +59,18 @@ onMounted(() => {
                         </router-link>
                     </div>
                 </div>
-                <a href="/venue" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Venue</a>
-                <a href="/lecturer" class="text-black hover:text-gray-900"
-                    v-if="user.isLoggedIn && user.role == 'admin'">Lecturer</a>
-                <a href="/students" class="text-black hover:text-gray-900"
-                    v-if="user.isLoggedIn && user.role == 'admin'">Student</a>
+                <router-link to="/venue" class="text-black hover:text-gray-900" v-if="user.isLoggedIn">Venue</router-link>
+                <router-link to="/lecturer" class="text-black hover:text-gray-900"
+                    v-if="user.isLoggedIn && user.role == 'admin'">Lecturer</router-link>
+                <router-link to="/students" class="text-black hover:text-gray-900"
+                    v-if="user.isLoggedIn && user.role == 'admin'">Student</router-link>
                 <!-- <a href="/admin" v-if="isAdmin" class="text-black hover:text-gray-900" >Admin</a> -->
             </div>
 
             <Button variant="outline" color="destructive" @click="handleLogout" v-if="user.isLoggedIn">
                 Logout
             </Button>
-            <Button variant="outline" color="destructive" @click="handleLogout" v-if="!user.isLoggedIn">
+            <Button variant="outline" color="destructive" @click="router.push('/login')" v-if="!user.isLoggedIn">
                 Login
             </Button>
         </nav>
@@ -128,7 +127,7 @@ onMounted(() => {
                         <GraduationCap class="text-black" />
                         Student
                     </button>
-                    <button class="drawer-list" v-if="isAdmin" @click="goToPages('/admin')">
+                    <button class="drawer-list" v-if="user.role === 'admin'" @click="goToPages('/admin')">
                         <UserStar class="text-black" />
                         Admin
                     </button>
