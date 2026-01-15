@@ -58,7 +58,7 @@ const login = async () => {
 
         if (adminData && adminData.session_id) {
           user.login({ 
-            matric_no: data.login_name, // Using their staff ID
+            matric_no: data.login_name, 
             description: data.description, 
             name: data.full_name, 
             isLoggedIn: true, 
@@ -66,11 +66,21 @@ const login = async () => {
             sessionToken: adminData.session_id 
           })
           localStorage.setItem("session_id_utm_ttms", adminData.session_id)
-          localStorage.setItem("role", "admin") // lecturer , admin
+          localStorage.setItem("role", "admin") // lecturer , admin // Keep flag for other uses
           localStorage.setItem('matric_no', data.login_name)
         } else {
-          toast.error("Admin authentication failed", { id: "admin-failed" })
-          return
+          // Fallback to lecturer role if admin check fails (but they are still staff)
+          user.login({ 
+            matric_no: data.login_name, 
+            description: data.description, 
+            name: data.full_name, 
+            isLoggedIn: true, 
+            role: "lecturer", 
+            sessionToken: data.session_id 
+          })
+          localStorage.setItem("session_id_utm_ttms", data.session_id)
+          localStorage.setItem('matric_no', data.login_name)
+          localStorage.removeItem("is_admin")
         }
 
       // 2. Logic for STUDENT

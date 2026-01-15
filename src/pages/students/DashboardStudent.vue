@@ -1,8 +1,7 @@
 <script setup>
-import BarChart from "@/components/chart/students/CoursesStudent.vue";
-import { Button } from "@/components/ui/button"; // shadcn Button import
+import { Button } from "@/components/ui/button"; 
 import { useUserStore } from "@/stores/user";
-import { ChartLine, GraduationCap, House, LibraryBig, Loader2, School, Sheet, Users, UserStar } from "lucide-vue-next";
+import { Loader2 } from "lucide-vue-next";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
@@ -17,122 +16,190 @@ import {
     LinearScale,
 } from "chart.js";
 import axios from "axios";
+import { readSessionJSON, writeSessionJSON } from "@/stores/sessionStorage";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const students = ref([])
-// students info
 const studentSession = ref('')
 const studentYear = ref(0)
 const studentSem = ref('')
 
-const drawerOpen = ref(false)
 const user = useUserStore()
 const router = useRouter()
-const admissionInfo = ref({ session: "Loading...", semester: "-", year: "-" });
-const semesters = ref([]);
-const chartOptions = ref({ responsive: true });
 const isLoading = ref(true)
+const chartOptions = ref({ responsive: true });
 
-function toggleDrawer() {
-    drawerOpen.value = !drawerOpen.value
-}
-const handleLogout = () => {
-    // Add your logout logic here, e.g., clearing auth tokens
-    console.log("user logging out")
-    user.logout()
-    toast.success("Logged out successfully!", { id: "logout-success" })
-    router.push("login")
+// --- CACHE SETTINGS ---
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+const userKey = computed(() => user.matric_no || "unknown");
+const cacheKeyStudent = computed(() => `ttms:home:student:${userKey.value}`);
+const cacheKeyLecturer = computed(() => `ttms:home:lecturer:${userKey.value}`);
+
+const isFresh = (savedAt) => {
+    if (!savedAt) return false;
+    return Date.now() - savedAt <= CACHE_MAX_AGE_MS;
 };
 
-const goToPages = (page) => {
-    router.push(page)
-}
-
+const lecturerSubjects = ref([]);
+const totalLecturerStudents = ref(0);
 
 onMounted(async () => {
+    if (user.role === 'student') {
+        await fetchStudentData();
+    } else {
+        await fetchLecturerData();
+    }
+});
+
+const fetchStudentData = async () => {
     try {
+        isLoading.value = true;
+        
+        // Restore from cache if available
+        const cached = readSessionJSON(cacheKeyStudent.value, null);
+        if (cached && isFresh(cached.savedAt)) {
+            students.value = cached.students;
+            studentSession.value = cached.session;
+            studentYear.value = cached.year;
+            studentSem.value = cached.semester;
+            isLoading.value = false;
+            return;
+        }
+
         const response = await axios.get(import.meta.env.VITE_BASE_URL, {
             params: {
                 'entity': 'pelajar_subjek',
                 'no_matrik': localStorage.getItem('matric_no')
             }
-        })
-        // console.log(`response data: ${JSON.stringify(response.data, null, 2)}`)
-        students.value = response.data
-        console.log("student is")
-        if (students.value.length > 0) {
-            console.log('First student object:', students.value[0].sesi);
-        }
-        studentSession.value = students.value[0].sesi
-        studentYear.value = students.value[0].tahun_kursus
-        studentSem.value = students.value[0].semester
-        console.log(`isloading? ${isLoading.value}`)
-    } catch (error) {
-        console.log("Error fetching students list: ", error);
-        toast.error("Failed to load students list.", {
-            id: "students-load-failed",
         });
+
+        students.value = response.data;
+        if (students.value.length > 0) {
+            studentSession.value = students.value[0].sesi;
+            studentYear.value = students.value[0].tahun_kursus;
+            studentSem.value = students.value[0].semester;
+        }
+
+        // Save to cache
+        writeSessionJSON(cacheKeyStudent.value, {
+            savedAt: Date.now(),
+            students: students.value,
+            session: studentSession.value,
+            year: studentYear.value,
+            semester: studentSem.value
+        });
+    } catch (error) {
+        console.error("Error fetching students list: ", error);
+        toast.error("Failed to load student dashboard.");
     } finally {
         isLoading.value = false;
     }
-});
+};
+
+const fetchLecturerData = async () => {
+    try {
+        isLoading.value = true;
+        const matricNo = localStorage.getItem('matric_no');
+
+        // Restore from cache if available
+        const cached = readSessionJSON(cacheKeyLecturer.value, null);
+        if (cached && isFresh(cached.savedAt)) {
+            lecturerSubjects.value = cached.subjects;
+            studentSession.value = cached.session;
+            studentSem.value = cached.semester;
+            totalLecturerStudents.value = cached.totalStudents;
+            isLoading.value = false;
+            return;
+        }
+        
+        // 1. Get Lecturer Subjects
+        const subRes = await axios.get(import.meta.env.VITE_BASE_URL, {
+            params: { entity: 'pensyarah_subjek', no_pekerja: matricNo }
+        });
+        const staffSubjects = subRes.data || [];
+        
+        if (staffSubjects.length > 0) {
+            studentSession.value = staffSubjects[0].sesi;
+            studentSem.value = staffSubjects[0].semester;
+            
+            // 2. Get Student Distribution for these subjects to get enrollment counts
+            const distRes = await axios.get(import.meta.env.VITE_BASE_URL, {
+                params: { 
+                    entity: 'subjek_seksyen', 
+                    sesi: studentSession.value, 
+                    semester: studentSem.value 
+                }
+            });
+            const allDist = distRes.data || [];
+            
+            totalLecturerStudents.value = 0; 
+            lecturerSubjects.value = staffSubjects.map(sub => {
+                const match = allDist.find(d => d.kod_subjek === sub.kod_subjek);
+                const sectionDetail = match?.seksyen_list?.find(s => s.seksyen == sub.seksyen);
+                const count = sectionDetail ? parseInt(sectionDetail.bil_pelajar) : 0;
+                totalLecturerStudents.value += count;
+                return { ...sub, bil_pelajar: count };
+            });
+
+            // Save to cache
+            writeSessionJSON(cacheKeyLecturer.value, {
+                savedAt: Date.now(),
+                subjects: lecturerSubjects.value,
+                session: studentSession.value,
+                semester: studentSem.value,
+                totalStudents: totalLecturerStudents.value
+            });
+        }
+    } catch (error) {
+        console.error("Error fetching lecturer data: ", error);
+        toast.error("Failed to load lecturer dashboard.");
+    } finally {
+        isLoading.value = false;
+    }
+};
 
 const groupedSemesters = computed(() => {
-    // Check if data is available and is an array
-    if (!students.value[0].sesi || !Array.isArray(students.value)) {
+    if (!students.value || !Array.isArray(students.value) || students.value.length === 0) {
         return [];
     }
 
-    // Use a Map to group subjects by Year and then by Semester
     const yearSemesterMap = new Map();
 
     students.value.forEach(subject => {
         const year = subject.tahun_kursus;
         const semester = subject.semester;
-
-        // Use a combined key for uniqueness (e.g., "Year 3 - Semester 1")
         const key = `Year ${year} - Semester ${semester}`;
 
         if (!yearSemesterMap.has(key)) {
             yearSemesterMap.set(key, {
-                // Assuming credit and type aren't in the data, we'll use placeholder/logic
-                sem_id: key.replace(/[^a-zA-Z0-9]/g, '_'), // Safe ID for key
-                name: key, // e.g., "Year 3 - Semester 1"
-                total_credit: 0, // We need to calculate this
+                sem_id: key.replace(/[^a-zA-Z0-9]/g, '_'),
+                name: key,
+                total_credit: 0,
                 subjects: []
             });
         }
 
         const semGroup = yearSemesterMap.get(key);
-
-        // Map the raw data keys to the keys needed by your template
         const structuredSubject = {
             code: subject.kod_subjek,
             name: subject.nama_subjek,
-            // NOTE: Your raw data is missing 'credit' and 'type' (Core/Elective). 
-            // I'm using placeholder values here. You must update this logic.
-            credit: 3, // PLACEHOLDER: Update with actual credit value
-            type: subject.kod_subjek.startsWith('SECJ') ? 'Core' : 'Elective' // EXAMPLE LOGIC
+            credit: 3, 
+            type: subject.kod_subjek.startsWith('SECJ') ? 'Core' : 'Elective'
         };
 
         semGroup.subjects.push(structuredSubject);
-        semGroup.total_credit += structuredSubject.credit; // Accumulate credits
+        semGroup.total_credit += structuredSubject.credit;
     });
 
-    // 3. Convert Map values to an Array and sort them logically (Year then Semester)
     const groupedArray = Array.from(yearSemesterMap.values());
-
-    // Sort by year ascending, then semester ascending
     groupedArray.sort((a, b) => {
         const yearA = parseInt(a.name.match(/Year (\d+)/)[1]);
         const yearB = parseInt(b.name.match(/Year (\d+)/)[1]);
         const semA = parseInt(a.name.match(/Semester (\d+)/)[1]);
         const semB = parseInt(b.name.match(/Semester (\d+)/)[1]);
 
-        if (yearA !== yearB) {
-            return yearA - yearB;
-        }
+        if (yearA !== yearB) return yearA - yearB;
         return semA - semB;
     });
 
@@ -140,40 +207,51 @@ const groupedSemesters = computed(() => {
 });
 
 const chartData = computed(() => {
-    if (!students.value[0].sesi || students.value.length === 0) {
-        return null; // Return null if data isn't ready
-    }
-    // 1. Group the subjects by 'tahun_kursus' (Course Year)
-    const subjectCountByYear = students.value.reduce((acc, subject) => {
-        const year = `Year ${subject.tahun_kursus}`;
-        acc[year] = (acc[year] || 0) + 1;
-        return acc;
-    }, {});
+    if (user.role === 'student') {
+        if (!students.value || students.value.length === 0) return null;
+        
+        const subjectCountByYear = students.value.reduce((acc, subject) => {
+            const year = `Year ${subject.tahun_kursus}`;
+            acc[year] = (acc[year] || 0) + 1;
+            return acc;
+        }, {});
 
-    // 2. Prepare the arrays for Chart.js
-    const labels = Object.keys(subjectCountByYear).sort(); // Sort labels (e.g., Year 1, Year 2, Year 3)
-    const data = labels.map(label => subjectCountByYear[label]);
+        const labels = Object.keys(subjectCountByYear).sort();
+        const data = labels.map(label => subjectCountByYear[label]);
 
-    // 3. Structure the data object for Bar Chart
-    return {
-        labels: labels,
-        datasets: [
-            {
+        return {
+            labels: labels,
+            datasets: [{
                 label: 'Number of Subjects Taken',
                 backgroundColor: '#0096FF', 
                 borderColor: '#059669',
                 borderWidth: 1,
                 data: data,
-            }
-        ]
-    };
+            }]
+        };
+    } else {
+        if (lecturerSubjects.value.length === 0) return null;
+        
+        const labels = lecturerSubjects.value.map(s => `${s.kod_subjek} (S${s.seksyen})`);
+        const data = lecturerSubjects.value.map(s => s.bil_pelajar);
+
+        return {
+            labels: labels,
+            datasets: [{
+                label: 'Number of Students',
+                backgroundColor: '#800000', 
+                borderColor: '#600000',
+                borderWidth: 1,
+                data: data,
+            }]
+        };
+    }
 });
 
-onMounted(() => {
-    groupedSemesters
-    chartData
-})
-
+const totalAssignedCourses = computed(() => {
+    const uniqueCourses = new Set(lecturerSubjects.value.map(s => s.kod_subjek));
+    return uniqueCourses.size;
+});
 </script>
 
 <template>
@@ -185,12 +263,19 @@ onMounted(() => {
         <h1 class="text-2xl font-bold text-primary">Welcome back {{ user.name }}</h1>
 
         <div class="bg-white p-4 rounded shadow border-l-4 border-primary">
-            <h2 class="text-lg font-semibold">Admission Info</h2>
+            <h2 class="text-lg font-semibold">{{ user.role === 'student' ? 'Admission Info' : 'Lecturer Info' }}</h2>
             
             <div class="flex flex-wrap gap-4 md:gap-6 mt-2 text-gray-700">
-                <div><span class="font-bold" v-if="studentSession !== ''">Session:</span> {{ studentSession }}</div>
-                <div><span class="font-bold" v-if="studentYear !== 0">Current Year:</span> {{ studentYear }}</div>
-                <div><span class="font-bold" v-if="studentSem != 0">Semester:</span> {{ studentSem }}</div>
+                <div v-if="studentSession"><span class="font-bold">Session:</span> {{ studentSession }}</div>
+                <div v-if="user.role === 'student' && studentYear"><span class="font-bold">Current Year:</span> {{ studentYear }}</div>
+                <div v-if="studentSem"><span class="font-bold">Semester:</span> {{ studentSem }}</div>
+                
+                <template v-if="user.role !== 'student'">
+                    <div><span class="font-bold">Lecturer Name:</span> {{ user.name }}</div>
+                    <div><span class="font-bold">Total Courses:</span> {{ totalAssignedCourses }}</div>
+                    <div><span class="font-bold">Total Sections:</span> {{ lecturerSubjects.length }}</div>
+                    <div><span class="font-bold">Total Students:</span> {{ totalLecturerStudents }}</div>
+                </template>
             </div>
         </div>
 
@@ -199,6 +284,7 @@ onMounted(() => {
                 <div class="flex items-center justify-center">
                     <Loader2 class="animate-spin text-primary h-8 w-8" />
                 </div>
+                <p class="mt-2 text-xs">Loading visualization...</p>
             </div>
 
             <div v-else class="w-full h-80 flex items-center justify-center">
@@ -207,34 +293,48 @@ onMounted(() => {
         </div>
 
         <div class="grid md:grid-cols-2 gap-6">
-            <div v-for="sem in groupedSemesters" :key="sem.sem_id" class="bg-white border rounded-lg shadow-sm p-4">
-                <div class="flex justify-between border-b pb-2 mb-2">
-                    <h3 class="font-bold text-primary">{{ sem.name }}</h3>
-                    <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Number of Subjects: {{ sem.subjects.length
-                        }}</span>
+            <!-- Student View -->
+            <template v-if="user.role === 'student'">
+                <div v-for="sem in groupedSemesters" :key="sem.sem_id" class="bg-white border rounded-lg shadow-sm p-4">
+                    <div class="flex justify-between border-b pb-2 mb-2">
+                        <h3 class="font-bold text-primary">{{ sem.name }}</h3>
+                        <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Subjects: {{ sem.subjects.length }}</span>
+                    </div>
+                    <ul class="space-y-3">
+                        <li v-for="sub in sem.subjects" :key="sub.code" class="flex justify-between items-start text-sm">
+                            <div>
+                                <div class="font-medium">{{ sub.code }}</div>
+                                <div class="text-gray-500 text-xs">{{ sub.name }}</div>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
-                <ul class="space-y-3">
-                    <li v-for="sub in sem.subjects" :key="sub.code" class="flex justify-between items-start text-sm">
-                        <div>
-                            <div class="font-medium">{{ sub.code }}</div>
-                            <div class="text-gray-500 text-xs">{{ sub.name }}</div>
+            </template>
+
+            <!-- Lecturer View -->
+            <template v-else>
+                <div class="bg-white border rounded-lg shadow-sm p-4 col-span-full">
+                    <div class="flex justify-between border-b pb-2 mb-4">
+                        <h3 class="font-bold text-primary">Assigned Courses & Sections</h3>
+                        <span class="text-xs font-semibold bg-gray-200 px-2 py-1 rounded">Total Sections: {{ lecturerSubjects.length }}</span>
+                    </div>
+                    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div v-for="sub in lecturerSubjects" :key="sub.kod_subjek + sub.seksyen" 
+                             class="p-4 border rounded-md bg-gray-50 hover:border-primary transition-colors">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-xs font-bold text-primary px-2 py-0.5 bg-red-50 rounded">Section {{ sub.seksyen }}</span>
+                                <span class="text-[10px] text-gray-400 font-mono">{{ sub.kod_subjek }}</span>
+                            </div>
+                            <p class="text-sm font-bold text-gray-800 line-clamp-2 min-h-[40px]">{{ sub.nama_subjek }}</p>
+                            <div class="mt-4 flex items-center justify-between">
+                                <span class="text-xs text-gray-500">Students Enrolled:</span>
+                                <span class="text-lg font-bold text-primary">{{ sub.bil_pelajar }}</span>
+                            </div>
                         </div>
-                        <!-- <div class="text-right">
-                            <span class="block font-bold">{{ sub.credit }} Credit</span>
-                        </div> -->
-                    </li>
-                </ul>
-            </div>
+                    </div>
+                </div>
+            </template>
         </div>
     </div>
 </template>
 
-
-<style scoped>
-/* optional: make navbar sticky */
-nav {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-}
-</style>

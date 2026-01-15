@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user.js'
 import { DashboardStudent, DashboardLecturer, DashboardAdmin, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime, StudentList, CoursesAnalysis } from '../pages/index.js'
 

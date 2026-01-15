@@ -19,6 +19,8 @@ import {
 import getStudents from '@/api/api';
 import { useUserStore } from '@/stores/user';
 
+import { readSessionJSON, writeSessionJSON } from '@/stores/sessionStorage';
+
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 const isLoading = ref(true);
@@ -34,46 +36,35 @@ const currentPage = ref(1);
 const itemsPerPageOptions = [10, 25, 50, 100];
 const itemsPerPage = ref(itemsPerPageOptions[0]);
 
-// --- CHANGE 1: Enhanced Chart Options for Bigger Fonts ---
-const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-        y: {
-            beginAtZero: true,
-            title: { 
-                display: true, 
-                text: 'Number of Students',
-                font: { size: 14, weight: 'bold' } // Bigger axis title
-            },
-            ticks: {
-                font: { size: 12 } // Bigger Y-axis numbers
-            }
-        },
-        x: {
-            ticks: {
-                font: { size: 12, weight: 'bold' } // Bigger X-axis labels (Section names)
-            }
-        }
-    },
-    plugins: {
-        legend: {
-            labels: {
-                font: { size: 14 } // Bigger legend text
-            }
-        },
-        title: {
-            display: true,
-            text: 'Percentage of Students per Section',
-            font: { size: 18 } // Bigger chart title
-        }
-    }
+// --- CACHE SETTINGS ---
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const cacheKey = computed(() => `ttms:analysis:subjects:${session.value}:${semester.value}`);
+
+const isFresh = (savedAt) => {
+    if (!savedAt) return false;
+    return Date.now() - savedAt <= CACHE_MAX_AGE_MS;
 };
 
 const fetchingData = async () => {
     try {
         isLoading.value = true;
-        subjects.value = await getStudents('subjek_seksyen', user.sessionToken, session.value, semester.value)
+
+        // Try cache first
+        const cached = readSessionJSON(cacheKey.value, null);
+        if (cached && isFresh(cached.savedAt)) {
+            subjects.value = cached.data;
+            isLoading.value = false;
+            return;
+        }
+
+        const data = await getStudents('subjek_seksyen', user.sessionToken, session.value, semester.value)
+        subjects.value = data;
+
+        // Save to cache
+        writeSessionJSON(cacheKey.value, {
+            savedAt: Date.now(),
+            data: data
+        });
     } catch (error) {
         console.error("Failed to fetch subjects:", error);
     } finally {
