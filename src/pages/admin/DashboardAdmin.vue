@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Loader2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
-
+import { Bar, Line } from 'vue-chartjs'
+import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, LineElement, PointElement, Filler } from 'chart.js'
 /* =========================
    STATE
 ========================= */
@@ -17,10 +18,9 @@ const stats = ref({
   lecturers: savedStats?.lecturers || 0,
   venue: savedStats?.venue || 0,
 })
-console.log("admin statistic: ",localStorage.getItem('admin_statistic'))
+console.log("admin statistic: ", localStorage.getItem('admin_statistic'))
 const lecturerOverwork = ref([])
 const venueTimeTable = ref([])
-
 const venueRes = ref({})
 const sessionId = localStorage.getItem('session_id_utm_ttms')
 const adminId = localStorage.getItem('admin_id_utm_ttms') || ''
@@ -29,6 +29,27 @@ const adminId = localStorage.getItem('admin_id_utm_ttms') || ''
 ========================= */
 const ITEMS_PER_PAGE = 5
 const currentPage = ref(1)
+const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Chart Js
+ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, LineElement, PointElement, CategoryScale, LinearScale, Filler)
+const props = defineProps(['venueTimeTable', 'venueConflicts'])
+
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  indexAxis: 'y', // This flips the chart to horizontal
+  scales: {
+    y: {
+      grid: { display: false }, // Hide horizontal lines
+      ticks: { display: true }
+    },
+    x: {
+      grid: { display: false } // Hide vertical lines
+    }
+  }
+}
 
 /* =========================
    HELPER: FIND OVERLAPS
@@ -47,9 +68,9 @@ function findVenueOverlaps(timetable = []) {
     // OR same kod_subjek + seksyen
     const isDuplicate = map[key].some(existing => {
       const samePerkara = item.kod_perkara && existing.kod_perkara === item.kod_perkara;
-      
-      const sameSubjekSeksyen = 
-        item.subjek?.kod_subjek === existing.subjek?.kod_subjek && 
+
+      const sameSubjekSeksyen =
+        item.subjek?.kod_subjek === existing.subjek?.kod_subjek &&
         item.subjek?.seksyen === existing.subjek?.seksyen;
 
       return samePerkara || sameSubjekSeksyen;
@@ -78,9 +99,9 @@ const venueConflicts = computed(() => {
 
 const flattenedConflicts = computed(() => {
   return venueConflicts.value
-    .flatMap(venue => 
+    .flatMap(venue =>
       (venue.conflicts || [])
-        .filter(group => group && group.length > 0) 
+        .filter(group => group && group.length > 0)
         .map(group => ({
           kod_ruang: venue.kod_ruang,
           group
@@ -108,6 +129,7 @@ const getStatistics = async () => {
   loading.value = true
   error.value = null
   venueTimeTable.value = JSON.parse(localStorage.getItem('venueTimeTable')) || []
+  console.log("venueTimeTable: ", venueTimeTable.value)
 
   try {
     // 1. Fetch Basic Stats (only if missing)
@@ -148,36 +170,37 @@ const getStatistics = async () => {
         params: { session_id: sessionId }
       })
       currentAdminId = admin.data?.[0]?.session_id
-      localStorage.setItem('admin_id_utm_ttms',currentAdminId)
+      localStorage.setItem('admin_id_utm_ttms', currentAdminId)
     }
 
     if (currentAdminId) {
       const lecturerData = await getStudents('pensyarah', currentAdminId, '2025/2026', 1)
       lecturerOverwork.value = lecturerData.filter(l => l.bil_seksyen > 5)
+      console.log("lecturer overwork: ", lecturerOverwork.value)
     }
 
     // 4. Fetch Venue Timetables (The loop)
     // Optimization: Use Promise.all if the API can handle it, otherwise keep the loop
-    if(venueTimeTable.value.length === 0) {
+    if (venueTimeTable.value.length === 0) {
       console.log("loading venueTimeTable")
-        for (const v of venueRes.value.data) {
-          console.log("loading venue timetable")
-          const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
-            params: {
-              entity: 'jadual_ruang',
-              sesi: '2025/2026',
-              semester: 1,
-              kod_ruang: v.kod_ruang
-            }
-          })
-    
-          venueTimeTable.value.push({
-            kod_ruang: v.kod_ruang,
-            timetable: res.data || []
-          })
-        }
-        // Saving venue timetable inside localStorage 
-        localStorage.setItem('venueTimeTable',JSON.stringify(venueTimeTable.value))
+      for (const v of venueRes.value.data) {
+        console.log("loading venue timetable")
+        const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
+          params: {
+            entity: 'jadual_ruang',
+            sesi: '2025/2026',
+            semester: 1,
+            kod_ruang: v.kod_ruang
+          }
+        })
+
+        venueTimeTable.value.push({
+          kod_ruang: v.kod_ruang,
+          timetable: res.data || []
+        })
+      }
+      // Saving venue timetable inside localStorage 
+      localStorage.setItem('venueTimeTable', JSON.stringify(venueTimeTable.value))
     }
 
     // 5. Save to LocalStorage correctly
@@ -190,6 +213,57 @@ const getStatistics = async () => {
     loading.value = false
   }
 }
+
+const dayDistributionData = computed(() => {
+  const dayCounts = new Array(7).fill(0)
+
+  venueTimeTable.value.forEach(v => {
+    v.timetable.forEach(item => {
+      // Assuming 'hari' is 1-indexed (1=Mon) or adjust accordingly
+      if (item.hari >= 1 && item.hari <= 7) {
+        dayCounts[item.hari - 1]++
+      }
+    })
+  })
+
+  return {
+    labels: dayLabels,
+    datasets: [{
+      label: 'Events per Day',
+      backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'],
+      data: dayCounts
+    }]
+  }
+})
+
+const peakHourData = computed(() => {
+  // Create an array for hours 8 (8 AM) through 22 (10 PM)
+  const hours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+  const hourCounts = new Array(hours.length).fill(0);
+
+  venueTimeTable.value.forEach(v => {
+    v.timetable.forEach(item => {
+      const hour = parseInt(item.masa);
+      const hourIndex = hours.indexOf(hour);
+
+      if (hourIndex !== -1) {
+        hourCounts[hourIndex]++;
+      }
+    });
+  });
+
+  return {
+    labels: hours.map(h => `${h}:00`),
+    datasets: [{
+      label: 'Number of Classes',
+      data: hourCounts,
+      borderColor: '#4BC0C0',
+      backgroundColor: 'rgba(75, 192, 192, 0.2)',
+      fill: true, // This makes it an Area Chart
+      tension: 0.4 // Makes the line curvy
+    }]
+  };
+});
 
 /* =========================
    LIFECYCLE
@@ -223,27 +297,22 @@ const timetable = {
 }
 
 
-const venues = [
-  { name: "Lab A", usage: 92 },
-  { name: "Lab B", usage: 65 },
-  { name: "DKG 3", usage: 40 }
-]
 </script>
 
 <template>
   <!-- LOADING STATE -->
-  <div
-    v-if="loading"
-    class="min-h-screen flex flex-col items-center justify-center text-gray-600 space-y-4"
-  >
+  <div v-if="loading" class="min-h-screen flex flex-col items-center justify-center text-gray-600 space-y-4">
     <Loader2 class="animate-spin size-10" />
 
     <p class="text-sm">Loading admin dashboard…</p>
   </div>
 
-  <div v-else class="p-4 sm:p-8 space-y-6 font-sans">
-    <h1 class="text-2xl font-bold">Faculty of Computing – Admin Dashboard</h1>
-    <p class="text-gray-500 mb-6">2025/2026 Semester 1</p>
+  <div v-else class="p-4 sm:p-8 space-y-6 font-sans ">
+    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Admin Dashboard</h1>
+    <p class="text-gray-500 font-medium">Faculty of Computing • 2025/2026 Sem 1</p>
+
+    <!-- LECTURER WORKLOAD -->
+
 
     <!-- KPI CARDS -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -275,117 +344,107 @@ const venues = [
       </div>
     </div>
 
-    <!-- TIMETABLE STATUS -->
     <section class="mb-8">
-      <h2 class="text-xl font-semibold mb-3">Timetable Status</h2>
-      <ul class="space-y-1 text-gray-700">
-        <li>Completed Timetables: {{ timetable.completed }}</li>
-        <li>Pending Timetables: {{ timetable.pending }}</li>
-        <li>Rescheduled Classes: {{ timetable.rescheduled }}</li>
-      </ul>
-    </section>
 
-    <!-- CONFLICT TABLE -->
-    <section class="mb-8">
-      <h2 class="text-xl font-semibold mb-3">Conflict Monitoring</h2>
-
-      <table class="w-full border border-gray-200 rounded-lg">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="px-4 py-2 text-left">Venue</th>
-            <th class="px-4 py-2 text-left">Start Date</th>
-            <th class="px-4 py-2 text-left">Day</th>
-            <th class="px-4 py-2 text-left">Time</th>
-            <th class="px-4 py-2 text-left">Events</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          <tr v-for="(item, index) in paginatedConflicts" :key="item.kod_ruang + index" class="border-t">
-            <td class="px-4 py-2 text-red-600 font-semibold">
-              {{ item.kod_ruang }}
-            </td>
-
-            <td class="px-4 py-2">
-              {{ item.group[0].tarikh_mula }}
-            </td>
-
-            <td class="px-4 py-2">
-              {{ formatDay(item.group[0].hari) }}
-            </td>
-
-            <td class="px-4 py-2">
-              {{ formatTime(item.group[0].masa) }}
-            </td>
-
-            <td class="px-4 py-2">
-              <ul class="list-disc ml-4 text-sm">
-                <li v-for="(e, i) in item.group" :key="i">
-                  {{ e.kod_perkara || e.subjek?.kod_subjek }} - {{ e?.subjek?.seksyen || '' }}
-                </li>
-              </ul>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <!-- Pagination -->
-      <div class="flex justify-between items-center mt-4">
-        <button class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50" :disabled="currentPage === 1"
-          @click="currentPage--">
-          Previous
-        </button>
-
-        <span class="text-sm">
-          Page {{ currentPage }} of {{ totalPages }}
-        </span>
-
-        <button class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50" :disabled="currentPage === totalPages"
-          @click="currentPage++">
-          Next
-        </button>
-      </div>
-
-    </section>
-
-    <!-- LECTURER WORKLOAD -->
-    <section class="mb-8">
       <h2 class="text-xl font-semibold mb-3">Lecturer Workload</h2>
+
       <table class="w-full border border-gray-200 rounded-lg">
+
         <thead class="bg-gray-100">
           <tr>
             <th class="px-4 py-2 text-left">Lecturer</th>
             <th class="px-4 py-2 text-left">Sections</th>
             <th class="px-4 py-2 text-left">Subjects</th>
+
             <th class="px-4 py-2 text-left">Students</th>
+
           </tr>
+
         </thead>
+
         <tbody>
+
           <tr v-for="lecturer in lecturerOverwork" :key="lecturer.name" class="border-t">
+
             <td class="px-4 py-2 text-red-500">{{ lecturer.nama }}</td>
+
             <td class="px-4 py-2">{{ lecturer.bil_seksyen }}</td>
             <td class="px-4 py-2">{{ lecturer.bil_subjek }}</td>
             <td class="px-4 py-2">{{ lecturer.bil_pelajar }}</td>
-            <!-- <td class="px-4 py-2 font-semibold" :class="lecturer.hours > 12 ? 'text-red-600' : 'text-green-600'">
-              {{ lecturer.hours > 12 ? 'Overloaded' : 'Normal' }}
-            </td> -->
           </tr>
         </tbody>
       </table>
     </section>
 
-    <!-- VENUE UTILIZATION -->
-    <section class="mb-10">
-      <h2 class="text-xl font-semibold mb-3">Venue Utilization</h2>
-      <ul class="space-y-2">
-        <li v-for="venue in venues" :key="venue.name" class="flex justify-between bg-gray-50 p-3 rounded-lg">
-          <span>{{ venue.name }}</span>
-          <span class="font-semibold">{{ venue.usage }}%</span>
-        </li>
-      </ul>
-    </section>
+    <div class="p-6 lg:p-10 bg-gray-50 min-h-screen font-sans">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10">
+        <KPICard title="Total Courses" :value="stats.courses" color="blue" />
+        <KPICard title="Total Lecturers" :value="stats.lecturers" color="indigo" />
+        <KPICard title="Total Students" :value="stats.students" color="purple" />
+        <KPICard title="Total Venues" :value="stats.venue" color="emerald" />
+        <KPICard title="Conflicts" :value="venueConflicts.length" color="red" :alert="true" />
+      </div>
 
-    <footer class="text-center text-gray-400 text-sm">
-      🔒 Admin view only – editing disabled
-    </footer>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <div class="lg:col-span-4 space-y-8">
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Daily Load</h3>
+            <div class="h-64">
+              <Bar :data="dayDistributionData" :options="chartOptions" />
+            </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Peak Hour Intensity</h3>
+            <div class="h-64">
+              <Line :data="peakHourData" :options="chartOptions" />
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-8 space-y-8">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 class="text-lg font-bold text-gray-800">Conflict Monitoring</h2>
+              <span class="text-xs text-red-500 font-semibold bg-red-50 px-2 py-1 rounded">Action Required</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                  <tr>
+                    <th class="px-6 py-4">Venue</th>
+                    <th class="px-6 py-4">Schedule</th>
+                    <th class="px-6 py-4">Conflicting Events</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="(item, index) in paginatedConflicts" :key="index" class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 font-bold text-gray-900">{{ item.kod_ruang }}</td>
+                    <td class="px-6 py-4 text-sm">
+                      <div class="font-medium text-gray-700">{{ formatDay(item.group[0].hari) }}</div>
+                      <div class="text-gray-400">{{ formatTime(item.group[0].masa) }}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                      <div v-for="(e, i) in item.group" :key="i" class="text-sm text-gray-600 flex items-center mb-1">
+                        <span class="w-2 h-2 rounded-full bg-red-400 mr-2"></span>
+                        {{ e.kod_perkara || e.subjek?.kod_subjek }}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="p-4 bg-gray-50 flex justify-between items-center text-sm border-t">
+              <button @click="currentPage--" :disabled="currentPage === 1"
+                class="text-blue-600 font-semibold disabled:text-gray-300">← Prev</button>
+              <span class="text-gray-500">Page {{ currentPage }} / {{ totalPages }}</span>
+              <button @click="currentPage++" :disabled="currentPage === totalPages"
+                class="text-blue-600 font-semibold disabled:text-gray-300">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

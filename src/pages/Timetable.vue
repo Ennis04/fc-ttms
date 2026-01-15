@@ -6,7 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import axios from "axios"; 
+import axios from "axios";
 import { useUserStore } from "@/stores/user";
 import { readSessionJSON, writeSessionJSON, removeSession } from "@/stores/sessionStorage";
 
@@ -19,25 +19,33 @@ const error = ref("");
 const timetableData = ref([]);
 const currentSesi = ref("");
 const currentSem = ref("");
-const expandedDays = ref({ 2: true }); // Default Monday open
+const expandedDays = ref({ 2: true });
 
 // --- MAPPING ---
 const availableDays = [
-    { value: 2, label: "Monday", color: "bg-red-50 border-red-100", badge: "bg-red-200 text-red-800" },
-    { value: 3, label: "Tuesday", color: "bg-orange-50 border-orange-100", badge: "bg-orange-200 text-orange-800" },
-    { value: 4, label: "Wednesday", color: "bg-green-50 border-green-100", badge: "bg-green-200 text-green-800" },
-    { value: 5, label: "Thursday", color: "bg-blue-50 border-blue-100", badge: "bg-blue-200 text-blue-800" },
-    { value: 6, label: "Friday", color: "bg-purple-50 border-purple-100", badge: "bg-purple-200 text-purple-800" }, 
+    { value: 2, label: "Monday", color: "bg-red-50 border-red-100", light: "bg-red-100", border: "border-red-200", badge: "bg-red-200 text-red-800" },
+    { value: 3, label: "Tuesday", color: "bg-orange-50 border-orange-100", light: "bg-orange-100", border: "border-orange-200", badge: "bg-orange-200 text-orange-800" },
+    { value: 4, label: "Wednesday", color: "bg-green-50 border-green-100", light: "bg-green-100", border: "border-green-200", badge: "bg-green-200 text-green-800" },
+    { value: 5, label: "Thursday", color: "bg-blue-50 border-blue-100", light: "bg-blue-100", border: "border-blue-200", badge: "bg-blue-200 text-blue-800" },
+    { value: 6, label: "Friday", color: "bg-purple-50 border-purple-100", light: "bg-purple-100", border: "border-purple-200", badge: "bg-purple-200 text-purple-800" },
 ];
 
-// --- CACHE LOGIC (From Code 1) ---
+const timeSlots = [
+    { label: "8 AM", start: 8 }, { label: "9 AM", start: 9 },
+    { label: "10 AM", start: 10 }, { label: "11 AM", start: 11 },
+    { label: "12 PM", start: 12 }, { label: "1 PM", start: 13 },
+    { label: "2 PM", start: 14 }, { label: "3 PM", start: 15 },
+    { label: "4 PM", start: 16 }, { label: "5 PM", start: 17 }
+];
+
+// --- CACHE LOGIC ---
 const cacheKeyBase = computed(() => {
     const id = localStorage.getItem("matric_no") || "unknown";
     return `ttms:timetable:${id}`;
 });
 const cacheKeyData = computed(() => `${cacheKeyBase.value}:data`);
 const cacheKeyMeta = computed(() => `${cacheKeyBase.value}:meta`);
-const CACHE_MAX_AGE_MS = 30 * 60 * 1000; 
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
 const restoreFromCache = () => {
     const cachedData = readSessionJSON(cacheKeyData.value, []);
@@ -64,8 +72,8 @@ const saveToCache = () => {
 const filteredTimetable = computed(() => {
     if (!searchQuery.value) return timetableData.value;
     const query = searchQuery.value.toLowerCase();
-    return timetableData.value.filter(item => 
-        item.nama_subjek.toLowerCase().includes(query) || 
+    return timetableData.value.filter(item =>
+        item.nama_subjek.toLowerCase().includes(query) ||
         item.kod_subjek.toLowerCase().includes(query)
     );
 });
@@ -78,11 +86,21 @@ const formatDay = (day) => {
     return days[day] || day;
 };
 const formatTime = (startMasa, endMasa) => {
-    const end = endMasa || startMasa; 
-    const startHour = parseInt(startMasa) + 6; 
-    const endHour = parseInt(end) + 6; 
+    const end = endMasa || startMasa;
+    const startHour = parseInt(startMasa) + 6;
+    const endHour = parseInt(end) + 6;
     const pad = (n) => n < 10 ? '0' + n : n;
     return `${pad(startHour)}00 - ${pad(endHour)}50`;
+};
+
+const getGridStyle = (item) => {
+    const startCol = parseInt(item.masa) - 1;
+    const duration = item.endMasa ? (parseInt(item.endMasa) - parseInt(item.masa) + 1) : 1;
+    
+    return {
+        gridColumnStart: startCol,
+        gridColumnEnd: `span ${duration}`
+    };
 };
 
 // --- API ACTIONS ---
@@ -93,22 +111,18 @@ const fetchTimetable = async () => {
 
     try {
         let allSubjects = [];
-        // Attempt Student API
         try {
             const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
                 params: { entity: 'pelajar_subjek', no_matrik: matricNo }
             });
             if (Array.isArray(res.data) && res.data.length > 0) allSubjects = res.data;
-            console.log("STUDENT SUBJECTS FROM TIMETABLE: ",allSubjects)
             if(allSubjects.length){
                 currentSem.value=allSubjects[0].semester
                 currentSesi.value=allSubjects[0].sesi
-                console.log("filtering allSubjects, current sesi and current sem is: ",currentSem.value,currentSesi.value)
                 allSubjects=allSubjects.filter((subject)=>subject.sesi === currentSesi.value && subject.semester === currentSem.value)
             }
         } catch (e) { console.error("Student API fail", e); }
 
-        // Attempt Lecturer API if student fails
         if (allSubjects.length === 0) {
             try {
                 const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
@@ -126,7 +140,6 @@ const fetchTimetable = async () => {
         currentSesi.value = allSubjects[0].sesi;
         currentSem.value = allSubjects[0].semester;
 
-        // Fetch details for each subject
         const detailedRequests = allSubjects.map(async (subject) => {
             const [schRes, lecRes] = await Promise.allSettled([
                 axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
@@ -156,15 +169,14 @@ const fetchTimetable = async () => {
         const nestedResults = await Promise.all(detailedRequests);
         const sortedData = nestedResults.flat().sort((a, b) => (a.hari != b.hari) ? a.hari - b.hari : a.masa - b.masa);
 
-        // --- TIME MERGING LOGIC ---
         const mergedData = [];
         if (sortedData.length > 0) {
             let currentBlock = { ...sortedData[0], endMasa: sortedData[0].masa };
             for (let i = 1; i < sortedData.length; i++) {
                 const nextSlot = sortedData[i];
-                const isConsecutive = nextSlot.hari == currentBlock.hari && 
-                                     nextSlot.kod_subjek == currentBlock.kod_subjek && 
-                                     parseInt(nextSlot.masa) === parseInt(currentBlock.endMasa) + 1;
+                const isConsecutive = nextSlot.hari == currentBlock.hari &&
+                    nextSlot.kod_subjek == currentBlock.kod_subjek &&
+                    parseInt(nextSlot.masa) === parseInt(currentBlock.endMasa) + 1;
 
                 if (isConsecutive) {
                     currentBlock.endMasa = nextSlot.masa;
@@ -212,6 +224,57 @@ onMounted(() => {
                 <div class="relative w-full">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input v-model="searchQuery" placeholder="Search code or subject..." class="pl-10 bg-white rounded-full border-none" />
+                </div>
+            </div>
+
+            <div class="mb-8 overflow-x-auto border border-gray-100 rounded-xl shadow-sm bg-white pb-2">
+                <div class="min-w-[1200px] p-4"> 
+                    <div class="grid grid-cols-[80px_repeat(10,1fr)] gap-2 mb-2">
+                        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider self-end pb-1">Day</div>
+                        <div v-for="slot in timeSlots" :key="slot.start" 
+                            class="text-xs font-bold text-gray-400 text-center pb-1 border-b border-gray-100">
+                            {{ slot.label }}
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div v-for="day in availableDays" :key="day.value" class="grid grid-cols-[80px_repeat(10,1fr)] gap-2 h-32 items-center">
+                            
+                            <div class="flex flex-col justify-center h-full">
+                                <span class="font-bold text-gray-700 uppercase text-sm">{{ day.label.substring(0, 3) }}</span>
+                                <span class="text-[10px] text-gray-400 font-medium">{{ getClassesForDay(day.value).length }} Classes</span>
+                            </div>
+
+                            <div class="col-span-10 h-full relative bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                <div class="absolute inset-0 grid grid-cols-10 pointer-events-none">
+                                    <div v-for="n in 10" :key="n" class="border-r border-gray-100 last:border-0 h-full"></div>
+                                </div>
+
+                                <div class="absolute inset-0 grid grid-cols-10 gap-1 p-1">
+                                    <div v-for="item in getClassesForDay(day.value)" 
+                                        :key="item.kod_subjek"
+                                        class="rounded-md p-2 flex flex-col justify-between shadow-sm hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer border-l-4 overflow-hidden"
+                                        :class="[day.light, day.border]"
+                                        :style="getGridStyle(item)"
+                                        @click="selectedItem = item"
+                                    >
+                                        <div>
+                                            <p class="font-bold text-xs leading-tight text-gray-900 mb-1 line-clamp-3">
+                                                {{ item.nama_subjek }}
+                                            </p>
+                                            <p class="text-[11px] text-gray-700 font-mono font-medium">
+                                                {{ item.kod_subjek }}
+                                            </p>
+                                        </div>
+                                        
+                                        <p class="text-[10px] text-gray-600 truncate text-right opacity-100 mt-1 font-semibold">
+                                            {{ item.ruang?.kod_ruang || 'N/A' }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

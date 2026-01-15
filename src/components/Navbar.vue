@@ -60,7 +60,7 @@ onMounted(() => {
                     Dashboard
                 </router-link>
 
-                <router-link v-if="user.isLoggedIn && role !== 'admin'" to="/timetable" class="nav-link">
+                <router-link v-if="user.isLoggedIn && role == 'student'" to="/timetable" class="nav-link">
                     Timetable
                 </router-link>
 

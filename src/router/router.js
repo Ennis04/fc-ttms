@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user.js'
-import { DashboardStudent, DashboardLecturer, DashboardAdmin, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime, StudentList, CoursesAnalysis } from '../pages/index.js'
+import { DashboardStudent, DashboardLecturer, DashboardAdmin, Timetable, Courses, Analysis, Venue, Lecturer, Student, Admin, Login, StudentClassTime, CoursesAnalysis } from '../pages/index.js'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -10,7 +9,7 @@ const routes = [
   { path: '/dashboard-lecturer', component: DashboardLecturer, meta: { requiresAuth: true, role: 'lecturer' } },
   { path: '/dashboard-admin', component: DashboardAdmin, meta: { requiresAuth: true, role: 'admin' } },
 
-  { path: '/timetable', component: Timetable, meta: { requiresAuth: true, role: ['student', 'lecturer'] } },
+  { path: '/timetable', component: Timetable, meta: { requiresAuth: true, role: ['student'] } },
   { path: '/subject-analysis', component: Analysis, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/student-analysis', component: StudentClassTime, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/courses-analysis', component: CoursesAnalysis, meta: { requiresAuth: true, role: 'admin' } },
@@ -19,7 +18,7 @@ const routes = [
   { path: '/admin', component: Admin, meta: { requiresAuth: true, role: 'admin' } },
   { path: '/courses', component: Courses, meta: { requiresAuth: true, role: ['admin', 'lecturer'] } },
   { path: '/venue', component: Venue, meta: { requiresAuth: true, role: ['admin', 'lecturer'] } },
-  { path: '/student-list', component: StudentList, meta: { requiresAuth: true, role: ['lecturer'] } },
+  { path: '/student-list', component: Student, meta: { requiresAuth: true, role: ['lecturer'] } },
 ]
 
 const router = createRouter({
