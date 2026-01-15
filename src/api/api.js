@@ -16,7 +16,7 @@ const getStudents = async (entity,session_id,sesi,semester,limit,offset) => {
         }
       });
 
-      console.log("Students:", response.data);
+      // console.log("Students:", response.data);
       return response.data || []; // ensure array
     } else {
         console.log("Missing session_id or entity")

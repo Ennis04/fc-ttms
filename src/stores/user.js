@@ -26,6 +26,9 @@ export const useUserStore = defineStore('user', {
     },
     logout() {
       localStorage.removeItem("session_id_utm_ttms")
+      localStorage.removeItem("admin_statistic")
+      localStorage.removeItem("admin_id_utm_ttms")
+      localStorage.removeItem("venueTimeTable")
       if(localStorage.getItem("role")){
         localStorage.removeItem("role")
       }

@@ -62,11 +62,11 @@ const login = async () => {
             description: data.description, 
             name: data.full_name, 
             isLoggedIn: true, 
-            role: "lecturer", // lecturer , admin
+            role: "admin", // lecturer , admin
             sessionToken: adminData.session_id 
           })
           localStorage.setItem("session_id_utm_ttms", adminData.session_id)
-          localStorage.setItem("role", "lecturer") // lecturer , admin
+          localStorage.setItem("role", "admin") // lecturer , admin
           localStorage.setItem('matric_no', data.login_name)
         } else {
           toast.error("Admin authentication failed", { id: "admin-failed" })
