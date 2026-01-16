@@ -17,7 +17,7 @@ import { Bar } from "vue-chartjs";
 import { Chart, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from "chart.js";
 import { toast } from "vue-sonner";
 import axios from "axios";
-import getStudents from "@/api/api";
+import getStudents, { fetchStudents } from "@/api/api";
 import { Loader2 } from "lucide-vue-next";
 
 Chart.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
@@ -48,12 +48,12 @@ const chartOptions = {
 
 const sessionId = localStorage.getItem("session_id_utm_ttms");
 const baseUrl = import.meta.env.VITE_BASE_URL;
-
+const adminId = localStorage.getItem("admin_id_utm_ttms");
 // Analyze amount of students per department
 
 onMounted(async () => {
   try {
-    const students = await getStudents("pelajar",sessionId,"2024/2025",1,0);
+    const students = await fetchStudents(adminId, "2024/2025", 1);
   
     const countByCourses = {};
   // SECJH/SECJ/SCSJ/SECJ = Software Engineering

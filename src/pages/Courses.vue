@@ -279,7 +279,7 @@ onMounted(() => {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Enrollment by Subject Level</CardTitle>
+                        <CardTitle>Enrollment by Year</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div class="h-[300px]">
@@ -302,7 +302,7 @@ onMounted(() => {
                 
                 <Card class="md:col-span-2">
                     <CardHeader>
-                        <CardTitle>Student Distribution by Course Area</CardTitle> 
+                        <CardTitle>Student Distribution by Course</CardTitle> 
                     </CardHeader>
                     <CardContent class="flex justify-center">
                         <div class="h-[250px] w-[250px]">

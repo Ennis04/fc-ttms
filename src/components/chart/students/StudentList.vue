@@ -1,5 +1,5 @@
 <script setup>
-import getStudents from '@/api/api';
+import { fetchStudents } from '@/api/api';
 import Button from '@/components/ui/button/Button.vue';
 import Table from '@/components/ui/table/Table.vue';
 import TableCaption from '@/components/ui/table/TableCaption.vue';
@@ -12,6 +12,7 @@ import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 const sessionId = localStorage.getItem("session_id_utm_ttms");
+const adminId = localStorage.getItem("admin_id_utm_ttms");
 const students = ref([]);
 const isLoading = ref(true);
 
@@ -85,12 +86,8 @@ const prevPage = () => {
 
 onMounted(async () => {
   try {
-    students.value = await getStudents(
-      "pelajar",
-      sessionId,
-      "2024/2025",
-      0,
-    );
+    students.value = await fetchStudents(adminId, "2024/2025", 1);
+
   } catch (error) {
     console.log("Error fetching students list: ", error);
     toast.error("Failed to load students list.", {

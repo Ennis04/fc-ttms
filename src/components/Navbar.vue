@@ -100,9 +100,9 @@ onMounted(() => {
                 <router-link v-if="user.isLoggedIn && role === 'admin'" to="/students" class="nav-link">
                     Students
                 </router-link>
-                <router-link v-if="user.isLoggedIn && role === 'admin'" to="/courses-analysis" class="nav-link">
+                <!-- <router-link v-if="user.isLoggedIn && role === 'admin'" to="/courses-analysis" class="nav-link">
                     Courses
-                </router-link>
+                </router-link> -->
             </div>
 
             <!-- Right -->

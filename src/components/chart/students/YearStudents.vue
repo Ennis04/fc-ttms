@@ -21,7 +21,7 @@ import { ref, onMounted } from "vue";
 import { Bar } from "vue-chartjs";
 import { Chart, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from "chart.js";
 import { toast } from "vue-sonner";
-import getStudents from '@/api/api.js';
+import { fetchStudents } from '@/api/api.js';
 import axios from "axios";
 import { Loader2 } from "lucide-vue-next";
 
@@ -32,6 +32,7 @@ Chart.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 // ----------------------------------------------------
 const chartData = ref(null);
 const isLoading = ref(true)
+const adminId = localStorage.getItem("admin_id_utm_ttms");
 
 const chartOptions = {
   responsive: true,
@@ -58,7 +59,7 @@ const sessionId = localStorage.getItem("session_id_utm_ttms");
 
 onMounted(async () => {
   try {
-    const students = await getStudents("pelajar",sessionId,"2024/2025",1,0);
+    const students = await  fetchStudents(adminId, "2024/2025", 1);
   
     const countBySubjects = {};
   

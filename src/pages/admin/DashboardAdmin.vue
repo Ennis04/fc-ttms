@@ -1,5 +1,5 @@
 <script setup>
-import getStudents from '@/api/api'
+import getStudents, { fetchStudents } from '@/api/api'
 import axios from 'axios'
 import { Loader2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
@@ -23,7 +23,7 @@ const lecturerOverwork = ref([])
 const venueTimeTable = ref([])
 const venueRes = ref({})
 const sessionId = localStorage.getItem('session_id_utm_ttms')
-const adminId = localStorage.getItem('admin_id_utm_ttms') || ''
+let adminId = localStorage.getItem('admin_id_utm_ttms') || ''
 /* =========================
    PAGINATION
 ========================= */
@@ -133,11 +133,6 @@ const getStatistics = async () => {
 
   try {
     // 1. Fetch Basic Stats (only if missing)
-    if (stats.value.students === 0) {
-      console.log("loading students")
-      const res = await getStudents('pelajar', sessionId, '2025/2026')
-      stats.value.students = res.length // Update property, don't overwrite object
-    }
 
     if (stats.value.lecturers === 0) {
       console.log("loading lecturers")
@@ -170,8 +165,20 @@ const getStatistics = async () => {
         params: { session_id: sessionId }
       })
       currentAdminId = admin.data?.[0]?.session_id
+      adminId = currentAdminId
       localStorage.setItem('admin_id_utm_ttms', currentAdminId)
     }
+
+    if (stats.value.students === 0) {
+        console.log("loading students")
+        const res = await fetchStudents(adminId,"2025/2026",1)
+        // const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
+        //   params: { entity: 'pelajar', session_id:sessionId, sesi: '2025/2026', semester: 1, limit:1700,offset:0 }
+        // })
+        //  entity=pelajar&session_id=???&sesi=yyyy/yyyy&semester=[1|2]&limit=num_&offset=num_
+        stats.value.students = res.length // Update property, don't overwrite object
+    }
+
 
     if (currentAdminId) {
       const lecturerData = await getStudents('pensyarah', currentAdminId, '2025/2026', 1)
