@@ -1,29 +1,28 @@
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { 
-    Search, Eye, ArrowLeft, Loader2, Users, GraduationCap, ChevronLeft, ChevronRight, BarChart3, List
+    Search, Eye, ArrowLeft, Loader2, GraduationCap, ChevronLeft, ChevronRight, BarChart3, List
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bar, Doughnut } from "vue-chartjs"; // Import Chart Components
+import { Bar, Doughnut } from "vue-chartjs";
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, ArcElement } from "chart.js";
 import axios from "axios"; 
 import { useUserStore } from "@/stores/user"; 
-import { readSessionJSON, writeSessionJSON } from "@/stores/sessionStorage";
 
 // REGISTER CHARTS
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 // --- STATE MANAGEMENT ---
 const userStore = useUserStore(); 
-const currentView = ref(0); // 0=Dashboard, 1=List, 2=CourseDetail, 3=SectionDetail
+const currentView = ref(0); 
 const loading = ref(false);
 const error = ref("");
 const searchQuery = ref("");
 
 // SESSION STATE
-const currentSesi = ref("2025/2026"); // Default fallback
+const currentSesi = ref("2025/2026"); 
 const currentSem = ref(1);
 
 // PAGINATION STATE
@@ -31,12 +30,41 @@ const currentPage = ref(1);
 const itemsPerPage = 10;
 
 // Data Containers
-const rawAllSections = ref([]); // Holds raw data for charts
+const rawAllSections = ref([]); 
+const rawStudents = ref([]);    
 const coursesList = ref([]);       
 const selectedCourse = ref(null);  
 const courseSections = ref([]);    
 const selectedSection = ref(null); 
 const sectionStudents = ref([]);   
+
+// --- CHART OPTIONS ---
+const topCoursesOptions = {
+    indexAxis: 'y', 
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { display: false },
+        tooltip: {
+            callbacks: {
+                title: (tooltipItems) => tooltipItems[0].label,
+                label: (context) => `Enrollment: ${context.formattedValue} Students`
+            }
+        }
+    },
+    scales: {
+        x: { ticks: { precision: 0 }, grid: { display: false } },
+        y: {
+            ticks: {
+                autoSkip: false,
+                callback: function(value) {
+                    const label = this.getLabelForValue(value);
+                    return label.length > 25 ? label.substr(0, 25) + '...' : label;
+                }
+            }
+        }
+    }
+};
 
 // --- CHART DATA COMPUTED ---
 
@@ -44,7 +72,6 @@ const sectionStudents = ref([]);
 const chartTopCourses = computed(() => {
     if (!rawAllSections.value.length) return null;
 
-    // Group by Subject Code
     const map = {};
     rawAllSections.value.forEach(sec => {
         const code = sec.kod_subjek;
@@ -53,86 +80,77 @@ const chartTopCourses = computed(() => {
         map[code].total += count;
     });
 
-    // Sort and take top 10
     const sorted = Object.entries(map)
         .sort(([, a], [, b]) => b.total - a.total)
         .slice(0, 10);
 
     return {
-        labels: sorted.map(([code]) => code),
+        labels: sorted.map(([code, data]) => `${code} - ${data.name}`), 
         datasets: [{
-            label: 'Total Students',
+            label: 'Total Enrollments',
             data: sorted.map(([, data]) => data.total),
-            backgroundColor: '#8b5cf6', // Purple
-            borderRadius: 6
+            backgroundColor: '#8b5cf6', 
+            borderRadius: 6,
+            barThickness: 20,
         }]
     };
 });
 
-// 2. Enrollment by Year Level (Based on 1st digit of code number, e.g., SECJ3xxx)
+// 2. Enrollment by Year Level
 const chartLevelDist = computed(() => {
-    if (!rawAllSections.value.length) return null;
+    if (!rawStudents.value.length) return null;
 
-    const levels = { 'Year 1': 0, 'Year 2': 0, 'Year 3': 0, 'Year 4': 0, 'Masters/Other': 0 };
+    const levels = { 'Year 1': 0, 'Year 2': 0, 'Year 3': 0, 'Year 4': 0 };
 
-    rawAllSections.value.forEach(sec => {
-        // Regex to find the first digit after letters: SECJ(3)032
-        const match = sec.kod_subjek.match(/[A-Z]+(\d)/); 
-        const level = match ? parseInt(match[1]) : 0;
-        const count = parseInt(sec.bil_pelajar) || 0;
-
-        if (level === 1) levels['Year 1'] += count;
-        else if (level === 2) levels['Year 2'] += count;
-        else if (level === 3) levels['Year 3'] += count;
-        else if (level === 4) levels['Year 4'] += count;
-        else levels['Masters/Other'] += count;
+    rawStudents.value.forEach(stu => {
+        const year = parseInt(stu.tahun_kursus) || 0;
+        if (year === 1) levels['Year 1']++;
+        else if (year === 2) levels['Year 2']++;
+        else if (year === 3) levels['Year 3']++;
+        else if (year >= 4) levels['Year 4']++;
     });
 
     return {
         labels: Object.keys(levels),
         datasets: [{
-            label: 'Students Enrolled',
+            label: 'Active Students',
             data: Object.values(levels),
-            backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280']
+            backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+            borderRadius: 6,
+            barPercentage: 0.6
         }]
     };
 });
 
-// 3. Course Area Distribution (Based on Code Prefix, e.g., SECJ, SECR)
-const chartCourseArea = computed(() => {
+// 3. Course Distribution by Area
+const chartCourseDist = computed(() => {
     if (!rawAllSections.value.length) return null;
 
-    const areas = {};
+    const distribution = {};
     rawAllSections.value.forEach(sec => {
-        // Regex: Get the alphabetic prefix (e.g., "SECJ" from "SECJ1013")
-        const match = sec.kod_subjek.match(/^[A-Z]+/);
-        const prefix = match ? match[0] : 'Other';
-        
+        let prefix = sec.kod_subjek.substring(0, 4).toUpperCase();
+        if (!prefix.startsWith('SEC') && !prefix.startsWith('SCS') && !prefix.startsWith('UCS')) {
+             prefix = 'Other'; 
+        }
         const count = parseInt(sec.bil_pelajar) || 0;
-        
-        // Sum students per area
-        areas[prefix] = (areas[prefix] || 0) + count;
+        distribution[prefix] = (distribution[prefix] || 0) + count;
     });
 
-    // Optional: Sort by count descending so biggest slices come first
-    const sortedEntries = Object.entries(areas).sort(([, a], [, b]) => b - a);
+    const sorted = Object.entries(distribution).sort(([,a], [,b]) => b - a);
 
     return {
-        labels: sortedEntries.map(([label]) => label),
+        labels: sorted.map(([k]) => k),
         datasets: [{
-            label: 'Students',
-            data: sortedEntries.map(([, value]) => value),
-            // A larger palette for potentially many departments
+            data: sorted.map(([,v]) => v),
             backgroundColor: [
-                '#3b82f6', '#8b5cf6', '#ec4899', '#10b981', 
-                '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#f97316'
+                '#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#14b8a6'
             ],
-            borderWidth: 1
+            borderWidth: 0
         }]
     };
 });
 
-// --- HELPER: SEARCH & PAGINATION ---
+// --- HELPER ---
 const filteredCourses = computed(() => {
     if (!searchQuery.value) return coursesList.value;
     const query = searchQuery.value.toLowerCase();
@@ -150,27 +168,93 @@ const paginatedCourses = computed(() => {
 });
 
 // --- API ACTIONS ---
-
 const fetchAnalysisData = async () => {
     loading.value = true;
-    try {
-        // 1. Get Session Info (Optional if hardcoded)
-        // ... (Reuse your session logic here if needed)
+    const baseUrl = 'http://web.fc.utm.my/ttms/web_man_webservice_json.cgi';
+    const sessionId = localStorage.getItem("session_id_utm_ttms");
 
-        // 2. Fetch ALL Sections (Heavy Query for Analysis)
-        // We use 'subjek_seksyen' with a high limit to get everything for charts
-        const res = await axios.get('http://web.fc.utm.my/ttms/web_man_webservice_json.cgi', {
+    try {
+        // 1. ADMIN AUTH: Get/Verify Admin ID
+        let adminId = localStorage.getItem('admin_id_utm_ttms');
+        
+        if (!adminId && sessionId) {
+            console.log("Admin ID missing, authenticating...");
+            try {
+                const authRes = await axios.get('http://web.fc.utm.my/ttms/auth-admin.php', {
+                    params: { session_id: sessionId }
+                });
+                adminId = authRes.data?.[0]?.session_id;
+                if (adminId) localStorage.setItem('admin_id_utm_ttms', adminId);
+            } catch (authErr) { console.error("Admin auth failed:", authErr); }
+        }
+
+        // 2. FETCH ALL STUDENTS (PAGINATION LOOP)
+        // Since API caps limit at 1000, we must loop offsets
+        let allStudents = [];
+        let offset = 0;
+        let limit = 1000;
+        let moreData = true;
+
+        // Start Fetching Sections immediately (Parallel start)
+        const sectionsPromise = axios.get(baseUrl, {
             params: {
                 entity: 'subjek_seksyen', 
                 sesi: currentSesi.value,
                 semester: currentSem.value,
-                limit: 3000 // Fetch all for accurate charts
+                limit: 3000
             }
         });
 
-        rawAllSections.value = res.data || [];
+        // Loop to fetch students
+        while (moreData) {
+            const res = await axios.get(baseUrl, {
+                params: {
+                    entity: 'pelajar',
+                    session_id: adminId || sessionId,
+                    sesi: currentSesi.value,
+                    semester: currentSem.value,
+                    limit: limit,
+                    offset: offset
+                }
+            });
+            
+            const data = res.data || [];
+            allStudents = [...allStudents, ...data];
 
-        // 3. Process Directory List (Unique Subjects for List View)
+            if (data.length < limit) {
+                moreData = false; // No more pages
+            } else {
+                offset += limit; // Next page
+            }
+        }
+
+        // Wait for sections to finish
+        const resSections = await sectionsPromise;
+        const allSectionsData = resSections.data || [];
+
+        // 3. FILTER DATA (Faculty of Computing Only)
+
+        // Filter Sections
+        rawAllSections.value = allSectionsData.filter(item => {
+            const code = item.kod_subjek || "";
+            const faculty = item.kod_fakulti || "";
+            return (
+                faculty === 'FC' || 
+                code.startsWith('SEC') || code.startsWith('SCS') || code.startsWith('SC') || code.startsWith('UCS')
+            );
+        });
+
+        // Filter Students
+        rawStudents.value = allStudents.filter(stu => {
+            const faculty = stu.kod_fakulti || "";
+            const program = stu.kod_kursus || ""; 
+            return (
+                faculty === 'FC' || 
+                program.startsWith('SEC') || program.startsWith('SCS') || program.startsWith('SC')
+            );
+        });
+
+        // 4. PROCESS DIRECTORY LIST
         const uniqueSubjects = new Map();
         rawAllSections.value.forEach(item => {
             if (!uniqueSubjects.has(item.kod_subjek)) {
@@ -193,10 +277,8 @@ const fetchAnalysisData = async () => {
     }
 };
 
-// --- NAVIGATION ---
 const openCourseDetail = (course) => {
     selectedCourse.value = course;
-    // Filter sections from our raw data instead of re-fetching
     courseSections.value = rawAllSections.value.filter(s => s.kod_subjek === course.kod_subjek);
     currentView.value = 2;
 };
@@ -204,7 +286,6 @@ const openCourseDetail = (course) => {
 const openSectionDetail = async (section) => {
     selectedSection.value = section;
     loading.value = true;
-    // We still need to fetch students individually as they aren't in the bulk call
     try {
         const sessionId = localStorage.getItem("session_id_utm_ttms");
         const res = await axios.get("http://web.fc.utm.my/ttms/web_man_webservice_json.cgi", {
@@ -223,23 +304,21 @@ const openSectionDetail = async (section) => {
     finally { loading.value = false; }
 };
 
-const goBack = () => {
-    if (currentView.value === 3) currentView.value = 2;
-    else if (currentView.value === 2) currentView.value = 0; // Go back to dashboard
-};
-
 onMounted(() => {
     fetchAnalysisData();
 });
 </script>
 
 <template>
-    <div class="p-4 md:p-6 max-w-6xl mx-auto min-h-screen">
+    <div class="p-4 md:p-6 max-w-[95%] mx-auto min-h-screen">
         
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-primary">Academic Courses Analysis</h1>
+                <h1 class="text-3xl font-bold text-primary">FC Course Analysis</h1>
                 <p class="text-gray-500">Session {{ currentSesi }} / Sem {{ currentSem }}</p>
+                <p v-if="rawStudents.length > 0" class="text-xs font-bold text-green-600 mt-1">
+                    Total FC Students: {{ rawStudents.length }}
+                </p>
             </div>
             
             <div class="flex bg-gray-100 p-1 rounded-lg">
@@ -261,68 +340,58 @@ onMounted(() => {
         </div>
 
         <div v-else-if="currentView === 0" class="space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                
+                <Card class="flex flex-col">
                     <CardHeader>
-                        <CardTitle>Top 10 Most Popular Courses</CardTitle>
+                        <CardTitle>Top 10 Popular Courses</CardTitle>
+                        <p class="text-xs text-gray-400">By total student enrollment</p>
                     </CardHeader>
-                    <CardContent>
-                        <div class="h-[300px]">
-                            <Bar v-if="chartTopCourses" :data="chartTopCourses" :options="{
-                                indexAxis: 'y',
-                                responsive: true,
-                                maintainAspectRatio: false
-                            }" />
+                    <CardContent class="flex-1">
+                        <div class="h-[500px] w-full">
+                            <Bar v-if="chartTopCourses" :data="chartTopCourses" :options="topCoursesOptions" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card class="flex flex-col">
                     <CardHeader>
-                        <CardTitle>Enrollment by Year</CardTitle>
+                        <CardTitle>FC Students by Year</CardTitle>
+                        <p class="text-xs text-gray-400">Distinct student headcount</p>
                     </CardHeader>
-                    <CardContent>
-                        <div class="h-[300px]">
+                    <CardContent class="flex-1">
+                        <div class="h-[500px] w-full">
                             <Bar v-if="chartLevelDist" :data="chartLevelDist" :options="{
                                 responsive: true,
-                                maintainAspectRatio: false
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                             }" />
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card class="bg-primary text-white">
-                    <CardContent class="p-6 flex flex-col justify-center items-center h-full">
-                        <span class="text-4xl font-bold">{{ coursesList.length }}</span>
-                        <span class="uppercase text-xs tracking-wider opacity-80 mt-2">Total Subjects</span>
                     </CardContent>
                 </Card>
                 
-                <Card class="md:col-span-2">
+                <Card class="flex flex-col">
                     <CardHeader>
-                        <CardTitle>Student Distribution by Course</CardTitle> 
+                        <CardTitle>Course Area Distribution</CardTitle>
+                        <p class="text-xs text-gray-400">Based on course code prefix</p>
                     </CardHeader>
-                    <CardContent class="flex justify-center">
-                        <div class="h-[250px] w-[250px]">
-                            <Doughnut v-if="chartCourseArea" :data="chartCourseArea" :options="{
+                    <CardContent class="flex-1 flex justify-center items-center">
+                        <div class="h-[400px] w-[400px] relative">
+                            <Doughnut v-if="chartCourseDist" :data="chartCourseDist" :options="{
                                 responsive: true,
                                 maintainAspectRatio: false,
+                                cutout: '60%',
                                 plugins: { 
-                                    legend: { 
-                                        position: 'right',
-                                        labels: { boxWidth: 12, font: { size: 11 } } 
-                                    } 
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 20 } } 
                                 }
                             }" />
-                        <div v-else class="h-full flex items-center justify-center text-gray-400">
-                            No Data
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
-             </div>
+                    </CardContent>
+                </Card>
+
+            </div>
         </div>
 
         <div v-else-if="currentView === 1">
@@ -345,6 +414,9 @@ onMounted(() => {
                     <Button variant="ghost" size="icon" @click="openCourseDetail(course)">
                         <Eye class="w-5 h-5 text-gray-400 hover:text-primary" />
                     </Button>
+                </div>
+                <div v-if="paginatedCourses.length === 0" class="p-8 text-center text-gray-400">
+                    No courses found.
                 </div>
             </div>
 
