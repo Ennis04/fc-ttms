@@ -345,7 +345,7 @@ onMounted(() => {
                 
                 <Card class="flex flex-col">
                     <CardHeader>
-                        <CardTitle>Top 10 Popular Courses</CardTitle>
+                        <CardTitle>Top 10 Courses</CardTitle>
                         <p class="text-xs text-gray-400">By total student enrollment</p>
                     </CardHeader>
                     <CardContent class="flex-1">
@@ -374,7 +374,7 @@ onMounted(() => {
                 
                 <Card class="flex flex-col">
                     <CardHeader>
-                        <CardTitle>Course Area Distribution</CardTitle>
+                        <CardTitle>Course Code Distribution</CardTitle>
                         <p class="text-xs text-gray-400">Based on course code prefix</p>
                     </CardHeader>
                     <CardContent class="flex-1 flex justify-center items-center">
